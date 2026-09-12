@@ -56,3 +56,21 @@ def test_invalid_port_raises_clear_error(monkeypatch: pytest.MonkeyPatch) -> Non
 
     with pytest.raises(ValueError, match="PORT must be set to a valid integer value."):
         get_settings()
+
+
+def test_invalid_debug_raises_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DEBUG", "ture")
+
+    with pytest.raises(ValueError, match="DEBUG must be set to a valid boolean value."):
+        get_settings()
+
+
+@pytest.mark.parametrize("port", ["-1", "99999"])
+def test_out_of_range_port_raises_clear_error(
+    monkeypatch: pytest.MonkeyPatch,
+    port: str,
+) -> None:
+    monkeypatch.setenv("PORT", port)
+
+    with pytest.raises(ValueError, match="PORT must be between 1 and 65535."):
+        get_settings()

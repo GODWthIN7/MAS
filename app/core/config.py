@@ -6,7 +6,12 @@ def _get_bool(name: str, default: bool) -> bool:
     value = os.getenv(name)
     if value is None:
         return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be set to a valid boolean value.")
 
 
 def _get_int(name: str, default: int) -> int:
@@ -14,9 +19,12 @@ def _get_int(name: str, default: int) -> int:
     if value is None:
         return default
     try:
-        return int(value)
+        port = int(value)
     except ValueError as exc:
         raise ValueError(f"{name} must be set to a valid integer value.") from exc
+    if not 1 <= port <= 65535:
+        raise ValueError(f"{name} must be between 1 and 65535.")
+    return port
 
 
 class Settings:
