@@ -30,7 +30,7 @@ pip install .[dev]
 ## Run locally
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn app.main:create_app --factory --reload
 ```
 
 The API will be available at `http://127.0.0.1:8000`, with the health endpoint at `/health`.

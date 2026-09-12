@@ -34,6 +34,7 @@ async def test_healthcheck_uses_environment_configuration(
     monkeypatch.setenv("APP_ENV", "staging")
     monkeypatch.setenv("APP_NAME", "MAS Staging API")
     monkeypatch.setenv("DEBUG", "true")
+    monkeypatch.setenv("PORT", "9001")
 
     app = create_app()
 
@@ -47,3 +48,11 @@ async def test_healthcheck_uses_environment_configuration(
     assert response.json()["environment"] == "staging"
     assert app.title == "MAS Staging API"
     assert app.debug is True
+    assert get_settings().port == 9001
+
+
+def test_invalid_port_raises_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PORT", "not-a-port")
+
+    with pytest.raises(ValueError, match="PORT must be set to a valid integer value."):
+        get_settings()
