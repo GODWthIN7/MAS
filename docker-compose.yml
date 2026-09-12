@@ -17,7 +17,6 @@ x-agent-env: &agent-env
   POSTGRES_URL: postgres://mas:${POSTGRES_PASS:-changeme}@postgres:5432/mas?sslmode=disable
   REDIS_URL: redis://:${REDIS_PASS:-changeme}@redis:6379/0
   QDRANT_URL: http://qdrant:6333
-  VAULT_ADDR: http://vault:8200
   OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
 
 x-health-defaults: &health-defaults
@@ -118,6 +117,8 @@ services:
   vault:
     <<: *mas-defaults
     image: hashicorp/vault:1.17
+    profiles:
+      - vault-dev
     cap_add:
       - IPC_LOCK
     command: server -dev
@@ -141,8 +142,6 @@ services:
       qdrant:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      vault:
         condition: service_healthy
     environment:
       <<: *agent-env
@@ -171,8 +170,6 @@ services:
       qdrant:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      vault:
         condition: service_healthy
     environment:
       <<: *agent-env

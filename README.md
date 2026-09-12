@@ -66,6 +66,7 @@ All variables are consumed by `startup.sh` and propagated into the Docker Compos
 | `MAS_COMPOSE_FILE` | `docker-compose.yml` | Path to the Compose file passed to all Compose invocations |
 | `MAS_LOG_DIR` | `./logs` | Host filesystem path for the shared log volume mount |
 | `MAS_HEALTH_TIMEOUT` | `120` | Maximum seconds the health poller waits for any service to reach healthy state |
+| `MAS_ROTATE_HMAC` | `false` | Optional manual rotation flag; set to `true` to rotate the HMAC key during startup while retaining `HMAC_PREVIOUS_KEY` overlap |
 | `POSTGRES_PASS` | `changeme` | PostgreSQL password — MUST be changed in production |
 | `REDIS_PASS` | `changeme` | Redis password — MUST be changed in production |
 | `RABBITMQ_PASS` | `changeme` | RabbitMQ password — MUST be changed in production |
@@ -88,10 +89,10 @@ The startup script implements an 8-phase sequential boot sequence with colour-co
 | Phase | Function | What It Does |
 |---|---|---|
 | 0 | `preflight_checks()` | Verifies required tools (docker, Docker Compose plugin or docker-compose, Python, curl, jq, openssl), Docker daemon responsiveness, Compose file presence and syntax validity, and ≥ 10 GB free disk space |
-| 1 | `bootstrap_secrets()` | Generates 256-bit HMAC-SHA256 signing key (auto-rotates if > 24 h old while retaining the previous key for overlap rollout), RS256 4096-bit JWT key pair, mTLS CA certificate (365-day validity), and writes `.env` |
+| 1 | `bootstrap_secrets()` | Generates a 256-bit HMAC-SHA256 signing key, optionally rotates it when `MAS_ROTATE_HMAC=true` while retaining the previous key for overlap rollout, generates an RS256 4096-bit JWT key pair, writes an mTLS CA certificate (365-day validity), and writes `.env` |
 | 2 | `prepare_infrastructure()` | Creates `mas-overlay` bridge network (172.28.0.0/16) and 5 named Docker volumes if absent; creates the host log directory |
 | 3 | `pull_images()` | Pulls all service images defined in `docker-compose.yml` using Compose pull in quiet mode and validates `prometheus.yml` with `promtool` |
-| 4 | `start_infrastructure()` | Starts postgres, redis, qdrant, rabbitmq, vault with per-service health polling and configurable timeouts |
+| 4 | `start_infrastructure()` | Starts postgres, redis, qdrant, rabbitmq with per-service health polling and configurable timeouts |
 | 5 | `start_agents()` | Starts Jaeger first so OTLP exports have a live collector, then starts gateway, orchestrator, planner, memory with health polling; then scales executor to ×3 replicas and starts critic |
 | 6 | `start_observability()` | Starts prometheus and grafana and logs the Grafana, Jaeger, and Prometheus URLs |
 | 7 | `smoke_tests()` | Runs 5 curl-based endpoint checks against Gateway, Orchestrator, Memory, Grafana, and Prometheus with bounded retries; reports PASS / FAIL count |
@@ -110,7 +111,7 @@ See `./startup.sh` for the full source.
 | redis | redis:7-alpine | 6379 (internal) | 0.5 | 512 MB | Cache, sessions, idempotency |
 | qdrant | qdrant/qdrant:v1.10.0 | 6333/6334 (internal) | 2.0 | 4 GB | Vector DB for Memory Agent RAG |
 | rabbitmq | rabbitmq:3.13-management | 5672, 15672 | 1.0 | 1 GB | AMQP message bus |
-| vault | hashicorp/vault:1.17 | 8200 (internal) | — | — | Secret management |
+| vault (optional `vault-dev` profile) | hashicorp/vault:1.17 | 8200 (internal) | — | — | Dev-only secret management sandbox |
 | gateway | mas/gateway:1.0.0 | 8080 (public) | 1.0 | 512 MB | External interface, authentication |
 | orchestrator | mas/orchestrator:1.0.0 | 8081 (internal) | 2.0 | 1 GB | Central coordinator |
 | planner | mas/planner:1.0.0 | 8082 (internal) | 2.0 | 2 GB | DAG task planning |
@@ -125,7 +126,7 @@ See `./startup.sh` for the full source.
 
 All services inherit a common base configuration via the `&mas-defaults` YAML anchor. This anchor injects three shared concerns into every service block using the `<<: *mas-defaults` merge key: (1) restart policy set to `unless-stopped`, (2) membership in the `mas-overlay` bridge network, and (3) structured JSON logging configured with `json-file` driver at 50 MB maximum file size and a 5-file rotation window.
 
-All 7 agent containers additionally inherit the `&agent-env` environment block via `<<: *agent-env`, which injects the full runtime wiring: `HMAC_KEY`, `RABBITMQ_URL`, `POSTGRES_URL`, `REDIS_URL`, `QDRANT_URL`, `VAULT_ADDR`, and the OpenTelemetry `OTEL_EXPORTER_OTLP_ENDPOINT` pointing to the Jaeger collector at `http://jaeger:4317`.
+All 7 agent containers additionally inherit the `&agent-env` environment block via `<<: *agent-env`, which injects the shared runtime wiring: `HMAC_KEY`, `RABBITMQ_URL`, `POSTGRES_URL`, `REDIS_URL`, `QDRANT_URL`, and the OpenTelemetry `OTEL_EXPORTER_OTLP_ENDPOINT` pointing to the Jaeger collector at `http://jaeger:4317`.
 
 ### Health Check Defaults
 
@@ -147,7 +148,7 @@ See `./docker-compose.yml` for the full source.
 | Grafana | http://localhost:3000 | Internal | Credentials: `admin` / configured `GRAFANA_PASS` |
 | Jaeger UI | http://localhost:16686 | Internal | Distributed trace explorer |
 | Prometheus | http://localhost:9090 | Internal | Raw metrics scrape targets and query UI |
-| Vault | http://vault:8200 | Internal | Internal container-network endpoint; token: `$VAULT_TOKEN` |
+| Vault (optional `vault-dev` profile) | http://vault:8200 | Internal | Dev-only internal endpoint; token: `$VAULT_TOKEN` |
 
 ---
 
@@ -192,7 +193,7 @@ docker compose down -v
 Rotate HMAC signing key manually with overlap material retained and restart affected services:
 
 ```bash
-cp .secrets/hmac_key .secrets/hmac_key.previous && openssl rand -hex 32 > .secrets/hmac_key && GRAFANA_PASS='your-grafana-password' ./startup.sh
+MAS_ROTATE_HMAC=true GRAFANA_PASS='your-grafana-password' ./startup.sh
 ```
 
 Force Prometheus configuration reload (no container restart required):
@@ -211,8 +212,8 @@ Complete all items before promoting to a production or internet-facing environme
 - [ ] Remove `VAULT_TOKEN=root`; unseal Vault properly using auto-unseal (KMS) or Shamir key shares
 - [ ] Verify `.secrets/` and `.env` remain ignored by Git — check with `git check-ignore -v .secrets/ .env`
 - [ ] Enable TLS on the Gateway by wiring real TLS certificate and key material into the gateway container configuration
-- [ ] Keep Vault internal-only unless you explicitly opt into a local dev port mapping for debugging
-- [ ] Rotate HMAC key on schedule — `startup.sh` auto-rotates if > 24 h old and preserves overlap material in `.secrets/hmac_key.previous`; verify modification time with `stat -c %y .secrets/hmac_key` (Linux) or `stat -f %Sm .secrets/hmac_key` (macOS)
+- [ ] Keep the optional `vault-dev` profile internal-only unless you explicitly opt into a local dev port mapping for debugging
+- [ ] Rotate HMAC key on schedule by running `MAS_ROTATE_HMAC=true ./startup.sh`; verify modification time with `stat -c %y .secrets/hmac_key` (Linux) or `stat -f %Sm .secrets/hmac_key` (macOS)
 - [ ] Enable RabbitMQ TLS by configuring `ssl_options` in `rabbitmq.conf` and mounting cert material
 - [ ] Set Grafana `GF_SERVER_PROTOCOL=https` and mount a valid TLS certificate
 - [ ] Review audit log retention policy: 90 days hot storage, 365 days cold storage

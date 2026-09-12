@@ -9,6 +9,7 @@ MAS_VERSION="${MAS_VERSION:-1.0.0}"
 MAS_COMPOSE_FILE="${MAS_COMPOSE_FILE:-docker-compose.yml}"
 MAS_LOG_DIR="${MAS_LOG_DIR:-./logs}"
 MAS_HEALTH_TIMEOUT="${MAS_HEALTH_TIMEOUT:-120}"
+MAS_ROTATE_HMAC="${MAS_ROTATE_HMAC:-false}"
 PROMETHEUS_IMAGE="${PROMETHEUS_IMAGE:-prom/prometheus:v2.53.0}"
 POSTGRES_PASS="${POSTGRES_PASS:-changeme}"
 REDIS_PASS="${REDIS_PASS:-changeme}"
@@ -106,15 +107,15 @@ ensure_hmac_key() {
   local hmac_file="$SCRIPT_DIR/.secrets/hmac_key"
   local previous_hmac_file="$SCRIPT_DIR/.secrets/hmac_key.previous"
 
-  if [[ -f "$hmac_file" ]] && [[ "$(file_age_seconds "$hmac_file")" -le 86400 ]]; then
-    log_info "Reusing existing HMAC key (<24h old)."
+  if [[ -f "$hmac_file" ]] && [[ "$MAS_ROTATE_HMAC" != "true" ]]; then
+    log_info "Reusing existing HMAC key."
     return
   fi
 
   if [[ -f "$hmac_file" ]]; then
     cp "$hmac_file" "$previous_hmac_file"
     chmod 600 "$previous_hmac_file"
-    log_warn "Rotating stale HMAC key; previous key retained for overlap rollout."
+    log_warn "Rotating HMAC key; previous key retained for overlap rollout."
   fi
 
   (
@@ -142,24 +143,28 @@ ensure_jwt_keypair() {
   log_info "Generated RS256 4096-bit JWT key pair."
 }
 
-ensure_ca_material() {
-  local ca_key="$SCRIPT_DIR/.secrets/ca.key"
+ensure_ca_certificate() {
   local ca_crt="$SCRIPT_DIR/.secrets/ca.crt"
+  local temp_dir
+  local temp_key
 
-  if [[ -f "$ca_key" && -f "$ca_crt" ]]; then
+  if [[ -f "$ca_crt" ]]; then
     return
   fi
 
+  temp_dir="$(mktemp -d /tmp/mas-ca.XXXXXX)"
+  temp_key="$temp_dir/ca.key"
   (
     umask 077
     openssl req -x509 -nodes -newkey rsa:4096 \
-      -keyout "$ca_key" \
+      -keyout "$temp_key" \
       -out "$ca_crt" \
       -days 365 \
       -subj "/CN=MAS Local CA" >/dev/null 2>&1
   )
-  chmod 600 "$ca_key" "$ca_crt"
-  log_info "Generated mTLS CA certificate (365 days)."
+  rm -rf "$temp_dir"
+  chmod 600 "$ca_crt"
+  log_info "Generated mTLS CA certificate (365 days) without persisting the CA private key."
 }
 
 dotenv_quote() {
@@ -180,6 +185,7 @@ write_env_file() {
     printf 'MAS_COMPOSE_FILE=%s\n' "$(dotenv_quote "$MAS_COMPOSE_FILE")"
     printf 'MAS_LOG_DIR=%s\n' "$(dotenv_quote "$MAS_LOG_DIR")"
     printf 'MAS_HEALTH_TIMEOUT=%s\n' "$(dotenv_quote "$MAS_HEALTH_TIMEOUT")"
+    printf 'MAS_ROTATE_HMAC=%s\n' "$(dotenv_quote "$MAS_ROTATE_HMAC")"
     printf 'PROMETHEUS_IMAGE=%s\n' "$(dotenv_quote "$PROMETHEUS_IMAGE")"
     printf 'POSTGRES_PASS=%s\n' "$(dotenv_quote "$POSTGRES_PASS")"
     printf 'REDIS_PASS=%s\n' "$(dotenv_quote "$REDIS_PASS")"
@@ -330,7 +336,7 @@ bootstrap_secrets() {
 
   ensure_hmac_key
   ensure_jwt_keypair
-  ensure_ca_material
+  ensure_ca_certificate
   write_env_file
 }
 
@@ -362,10 +368,10 @@ pull_images() {
 start_infrastructure() {
   log_phase "Phase 4 · Start infrastructure"
 
-  compose up -d postgres redis qdrant rabbitmq vault
+  compose up -d postgres redis qdrant rabbitmq
 
   local service
-  for service in postgres redis qdrant rabbitmq vault; do
+  for service in postgres redis qdrant rabbitmq; do
     wait_for_healthy "$service" "$MAS_HEALTH_TIMEOUT"
   done
 }
