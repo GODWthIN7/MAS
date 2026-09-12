@@ -179,7 +179,7 @@ services:
       SERVICE_PORT: "8081"
       JWT_PRIVATE_KEY_PATH: /run/mas-secrets/jwt_private.pem
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
     volumes:
       - *log-volume
       - *secrets-volume
