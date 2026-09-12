@@ -148,7 +148,7 @@ See `./docker-compose.yml` for the full source.
 | Grafana | http://localhost:3000 | Internal | Credentials: `admin` / configured `GRAFANA_PASS` |
 | Jaeger UI | http://localhost:16686 | Internal | Distributed trace explorer |
 | Prometheus | http://localhost:9090 | Internal | Raw metrics scrape targets and query UI |
-| Vault (optional `vault-dev` profile) | http://vault:8200 | Internal | Dev-only internal endpoint; token: `$VAULT_TOKEN` |
+| Vault (optional `vault-dev` profile) | http://vault:8200 | Internal | Compose-network-only endpoint; for host-side checks use `docker compose exec vault vault status` |
 
 ---
 

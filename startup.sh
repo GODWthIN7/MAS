@@ -152,7 +152,7 @@ ensure_ca_certificate() {
     return
   fi
 
-  temp_dir="$(mktemp -d /tmp/mas-ca.XXXXXX)"
+  temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/mas-ca.XXXXXX")"
   temp_key="$temp_dir/ca.key"
   (
     umask 077
@@ -163,7 +163,7 @@ ensure_ca_certificate() {
       -subj "/CN=MAS Local CA" >/dev/null 2>&1
   )
   rm -rf "$temp_dir"
-  chmod 600 "$ca_crt"
+  chmod 644 "$ca_crt"
   log_info "Generated mTLS CA certificate (365 days) without persisting the CA private key."
 }
 
@@ -192,7 +192,6 @@ write_env_file() {
     printf 'RABBITMQ_PASS=%s\n' "$(dotenv_quote "$RABBITMQ_PASS")"
     printf 'RABBITMQ_COOKIE=%s\n' "$(dotenv_quote "$RABBITMQ_COOKIE")"
     printf 'VAULT_TOKEN=%s\n' "$(dotenv_quote "$VAULT_TOKEN")"
-    printf 'GRAFANA_PASS=%s\n' "$(dotenv_quote "$GRAFANA_PASS")"
     printf 'LOG_LEVEL=%s\n' "$(dotenv_quote "$LOG_LEVEL")"
     printf 'HMAC_KEY=%s\n' "$(dotenv_quote "$hmac_key")"
     if [[ -n "$previous_hmac_key" ]]; then
