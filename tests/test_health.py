@@ -25,6 +25,10 @@ async def test_healthcheck() -> None:
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
     assert response.json()["environment"] == "development"
+    assert app.title == "MAS API"
+    assert app.debug is False
+    assert get_settings().host == "0.0.0.0"
+    assert get_settings().port == 8000
 
 
 @pytest.mark.anyio
@@ -34,6 +38,7 @@ async def test_healthcheck_uses_environment_configuration(
     monkeypatch.setenv("APP_ENV", "staging")
     monkeypatch.setenv("APP_NAME", "MAS Staging API")
     monkeypatch.setenv("DEBUG", "true")
+    monkeypatch.setenv("HOST", "127.0.0.1")
     monkeypatch.setenv("PORT", "9001")
 
     app = create_app()
@@ -48,6 +53,7 @@ async def test_healthcheck_uses_environment_configuration(
     assert response.json()["environment"] == "staging"
     assert app.title == "MAS Staging API"
     assert app.debug is True
+    assert get_settings().host == "127.0.0.1"
     assert get_settings().port == 9001
 
 
