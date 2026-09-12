@@ -43,7 +43,7 @@ The Phase 0 preflight check validates tools automatically, but host-level resour
 | Docker Engine | 24.0+ |
 | Docker Compose | v2.20+ (plugin or standalone); use `docker compose` for plugin, `docker-compose` for standalone |
 | curl | Any recent version — used for health polling and smoke tests |
-| jq | 1.6+ — used for JSON inspection in diagnostic commands |
+| jq | 1.6+ — used for JSON inspection in preflight daemon validation and diagnostic commands |
 | openssl | 3.0+ — required for secret generation (HMAC, RSA 4096, mTLS CA) |
 | Disk space | ≥ 10 GB free (preflight warns if below threshold) |
 | RAM | ≥ 16 GB recommended (Qdrant + Memory agent each consume up to 4 GB) |
@@ -71,7 +71,7 @@ All variables are consumed by `startup.sh` and propagated into the Docker Compos
 | `GRAFANA_PASS` | `admin` | Grafana administrator password |
 | `LOG_LEVEL` | `info` | Log verbosity across all agents: debug / info / warn / error |
 
-> **Security Warning:** Never commit `.env` or the `.secrets/` directory to version control. Both are already added to `.gitignore`. The `.secrets/` directory contains plaintext private keys and HMAC material. The generated `.env` file contains the live HMAC signing key.
+> **Security Warning:** Never commit `.env` or the `.secrets/` directory to version control. Both are already added to `.gitignore`. The `.secrets/` directory contains plaintext private keys and HMAC material. The generated `.env` file contains the live HMAC signing key and, during coordinated key rotation, may also include `HMAC_PREVIOUS_KEY` for overlap verification.
 
 ---
 
@@ -84,7 +84,7 @@ The startup script implements a 7-phase sequential boot sequence with colour-cod
 | Phase | Function | What It Does |
 |---|---|---|
 | 0 | `preflight_checks()` | Verifies required tools (docker, Docker Compose plugin or docker-compose, curl, jq, openssl), Docker daemon responsiveness, Compose file presence and syntax validity, and ≥ 10 GB free disk space |
-| 1 | `bootstrap_secrets()` | Generates 256-bit HMAC-SHA256 signing key (auto-rotates if > 24 h old), RS256 4096-bit JWT key pair, mTLS CA certificate (365-day validity), and writes `.env` |
+| 1 | `bootstrap_secrets()` | Generates 256-bit HMAC-SHA256 signing key (auto-rotates if > 24 h old while retaining the previous key for overlap rollout), RS256 4096-bit JWT key pair, mTLS CA certificate (365-day validity), and writes `.env` |
 | 2 | `prepare_infrastructure()` | Creates `mas-overlay` bridge network (172.28.0.0/16) and 5 named Docker volumes if absent; creates the host log directory |
 | 3 | `pull_images()` | Pulls all 14 service images defined in `docker-compose.yml` using Compose pull in quiet mode |
 | 4 | `start_infrastructure()` | Starts postgres, redis, qdrant, rabbitmq, vault with per-service health polling and configurable timeouts |
@@ -185,10 +185,10 @@ Hard stop + remove volumes — **DESTRUCTIVE** — all persistent data lost:
 docker-compose down -v
 ```
 
-Rotate HMAC signing key manually and restart affected services:
+Rotate HMAC signing key manually with overlap material retained and restart affected services:
 
 ```bash
-openssl rand -hex 32 > .secrets/hmac_key && docker-compose restart orchestrator gateway
+cp .secrets/hmac_key .secrets/hmac_key.previous && openssl rand -hex 32 > .secrets/hmac_key && docker-compose restart orchestrator gateway
 ```
 
 Force Prometheus configuration reload (no container restart required):
@@ -208,7 +208,7 @@ Complete all items before promoting to a production or internet-facing environme
 - [ ] Add `.secrets/` and `.env` to `.gitignore` — verify with `git check-ignore -v .secrets/ .env`
 - [ ] Enable TLS on the Gateway by mounting real TLS cert/key into the gateway runtime secret path
 - [ ] Set `VAULT_DEV_LISTEN_ADDRESS` to an internal interface only in production (do not expose port 8200 publicly)
-- [ ] Rotate HMAC key on schedule — `startup.sh` auto-rotates if > 24 h old; verify modification time with `stat .secrets/hmac_key`
+- [ ] Rotate HMAC key on schedule — `startup.sh` auto-rotates if > 24 h old and preserves overlap material in `.secrets/hmac_key.previous`; verify modification time with `stat .secrets/hmac_key`
 - [ ] Enable RabbitMQ TLS by configuring `ssl_options` in `rabbitmq.conf` and mounting cert material
 - [ ] Set Grafana `GF_SERVER_PROTOCOL=https` and mount a valid TLS certificate
 - [ ] Review audit log retention policy: 90 days hot storage, 365 days cold storage

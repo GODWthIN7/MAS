@@ -92,10 +92,17 @@ file_age_seconds() {
 
 ensure_hmac_key() {
   local hmac_file="$SCRIPT_DIR/.secrets/hmac_key"
+  local previous_hmac_file="$SCRIPT_DIR/.secrets/hmac_key.previous"
 
   if [[ -f "$hmac_file" ]] && [[ "$(file_age_seconds "$hmac_file")" -le 86400 ]]; then
     log_info "Reusing existing HMAC key (<24h old)."
     return
+  fi
+
+  if [[ -f "$hmac_file" ]]; then
+    cp "$hmac_file" "$previous_hmac_file"
+    chmod 600 "$previous_hmac_file"
+    log_warn "Rotating stale HMAC key; previous key retained for overlap rollout."
   fi
 
   openssl rand -hex 32 >"$hmac_file"
@@ -153,9 +160,14 @@ ensure_gateway_tls() {
 
 write_env_file() {
   local hmac_key
+  local previous_hmac_key=""
   hmac_key="$(tr -d '\n' <"$SCRIPT_DIR/.secrets/hmac_key")"
+  if [[ -f "$SCRIPT_DIR/.secrets/hmac_key.previous" ]]; then
+    previous_hmac_key="$(tr -d '\n' <"$SCRIPT_DIR/.secrets/hmac_key.previous")"
+  fi
 
-  cat >"$SCRIPT_DIR/.env" <<EOF
+  {
+    cat <<EOF
 MAS_ENV=$MAS_ENV
 MAS_VERSION=$MAS_VERSION
 MAS_COMPOSE_FILE=$MAS_COMPOSE_FILE
@@ -170,6 +182,10 @@ GRAFANA_PASS=$GRAFANA_PASS
 LOG_LEVEL=$LOG_LEVEL
 HMAC_KEY=$hmac_key
 EOF
+    if [[ -n "$previous_hmac_key" ]]; then
+      printf 'HMAC_PREVIOUS_KEY=%s\n' "$previous_hmac_key"
+    fi
+  } >"$SCRIPT_DIR/.env"
   chmod 600 "$SCRIPT_DIR/.env"
   log_info "Wrote minimal .env file."
 }
@@ -260,7 +276,7 @@ preflight_checks() {
 
   [[ -f "$COMPOSE_FILE_PATH" ]] || fail "Compose file not found: $COMPOSE_FILE_PATH"
 
-  docker info >/dev/null 2>&1 || fail "Docker daemon is not responding."
+  docker info --format '{{json .}}' | jq -e '.ServerVersion' >/dev/null || fail "Docker daemon is not responding."
   compose config >/dev/null
   log_info "Compose syntax is valid."
 

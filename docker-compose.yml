@@ -12,6 +12,7 @@ x-agent-env: &agent-env
   MAS_ENV: ${MAS_ENV:-production}
   LOG_LEVEL: ${LOG_LEVEL:-info}
   HMAC_KEY: ${HMAC_KEY:-}
+  HMAC_PREVIOUS_KEY: ${HMAC_PREVIOUS_KEY:-}
   RABBITMQ_URL: amqp://mas:${RABBITMQ_PASS:-changeme}@rabbitmq:5672/%2f
   POSTGRES_URL: postgres://mas:${POSTGRES_PASS:-changeme}@postgres:5432/mas?sslmode=disable
   REDIS_URL: redis://:${REDIS_PASS:-changeme}@redis:6379/0
@@ -49,11 +50,8 @@ services:
     volumes:
       - *log-volume
       - mas-postgres:/var/lib/postgresql/data
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 1G
+    cpus: 1.0
+    mem_limit: 1g
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mas -d mas"]
       <<: *health-defaults
@@ -70,11 +68,8 @@ services:
     volumes:
       - *log-volume
       - mas-redis:/data
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
+    cpus: 0.5
+    mem_limit: 512m
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASS}\" ping | grep -q PONG"]
       <<: *health-defaults
@@ -88,11 +83,8 @@ services:
     volumes:
       - *log-volume
       - mas-qdrant:/qdrant/storage
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 4G
+    cpus: 2.0
+    mem_limit: 4g
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:6333/healthz >/dev/null 2>&1"]
       interval: 15s
@@ -114,11 +106,8 @@ services:
     volumes:
       - *log-volume
       - mas-rabbitmq:/var/lib/rabbitmq
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 1G
+    cpus: 1.0
+    mem_limit: 1g
     healthcheck:
       test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
       interval: 15s
@@ -169,11 +158,8 @@ services:
     volumes:
       - *log-volume
       - *secrets-volume
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 512M
+    cpus: 1.0
+    mem_limit: 512m
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1 || wget -q -O- http://127.0.0.1:8080/health >/dev/null 2>&1"]
       <<: *health-defaults
@@ -202,11 +188,8 @@ services:
     volumes:
       - *log-volume
       - *secrets-volume
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 1G
+    cpus: 2.0
+    mem_limit: 1g
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/health >/dev/null 2>&1 || wget -q -O- http://127.0.0.1:8081/health >/dev/null 2>&1"]
       <<: *health-defaults
@@ -226,11 +209,8 @@ services:
     volumes:
       - *log-volume
       - *secrets-volume
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 2G
+    cpus: 2.0
+    mem_limit: 2g
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8082/health >/dev/null 2>&1 || wget -q -O- http://127.0.0.1:8082/health >/dev/null 2>&1"]
       <<: *health-defaults
@@ -250,11 +230,8 @@ services:
     volumes:
       - *log-volume
       - *secrets-volume
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 2G
+    cpus: 2.0
+    mem_limit: 2g
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8084/health >/dev/null 2>&1 || wget -q -O- http://127.0.0.1:8084/health >/dev/null 2>&1"]
       <<: *health-defaults
@@ -274,11 +251,8 @@ services:
     volumes:
       - *log-volume
       - *secrets-volume
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 2G
+    cpus: 2.0
+    mem_limit: 2g
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8085/health >/dev/null 2>&1 || wget -q -O- http://127.0.0.1:8085/health >/dev/null 2>&1"]
       <<: *health-defaults
@@ -303,11 +277,8 @@ services:
     volumes:
       - *log-volume
       - *secrets-volume
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 4G
+    cpus: 2.0
+    mem_limit: 4g
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8083/health >/dev/null 2>&1 || wget -q -O- http://127.0.0.1:8083/health >/dev/null 2>&1"]
       <<: *health-defaults
