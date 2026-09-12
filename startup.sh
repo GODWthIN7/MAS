@@ -82,7 +82,7 @@ detect_compose() {
 detect_python() {
   if command -v python3 >/dev/null 2>&1; then
     PYTHON_BIN="python3"
-  elif command -v python >/dev/null 2>&1; then
+  elif command -v python >/dev/null 2>&1 && python -c 'import sys; raise SystemExit(0 if sys.version_info[0] == 3 else 1)' >/dev/null 2>&1; then
     PYTHON_BIN="python"
   else
     fail "Python 3 is required to write a safely quoted .env file."

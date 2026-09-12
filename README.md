@@ -148,7 +148,7 @@ See `./docker-compose.yml` for the full source.
 | Grafana | http://localhost:3000 | Internal | Credentials: `admin` / configured `GRAFANA_PASS` |
 | Jaeger UI | http://localhost:16686 | Internal | Distributed trace explorer |
 | Prometheus | http://localhost:9090 | Internal | Raw metrics scrape targets and query UI |
-| Vault (optional `vault-dev` profile) | http://vault:8200 | Internal | Compose-network-only endpoint; for host-side checks use `docker compose exec vault vault status` |
+| Vault (optional `vault-dev` profile) | http://vault:8200 | Internal | Reachable only from other containers on the Compose network; for host-side checks use `docker compose exec vault vault status` |
 
 ---
 
@@ -213,7 +213,7 @@ Complete all items before promoting to a production or internet-facing environme
 - [ ] Verify `.secrets/` and `.env` remain ignored by Git — check with `git check-ignore -v .secrets/ .env`
 - [ ] Enable TLS on the Gateway by wiring real TLS certificate and key material into the gateway container configuration
 - [ ] Keep the optional `vault-dev` profile internal-only unless you explicitly opt into a local dev port mapping for debugging
-- [ ] Rotate HMAC key on schedule by running `MAS_ROTATE_HMAC=true ./startup.sh`; verify modification time with `stat -c %y .secrets/hmac_key` (Linux) or `stat -f %Sm .secrets/hmac_key` (macOS)
+- [ ] Rotate HMAC key on schedule by running `GRAFANA_PASS='your-grafana-password' MAS_ROTATE_HMAC=true ./startup.sh` on first setup, or `MAS_ROTATE_HMAC=true ./startup.sh` once `.secrets/grafana_pass` already exists; verify modification time with `stat -c %y .secrets/hmac_key` (Linux) or `stat -f %Sm .secrets/hmac_key` (macOS)
 - [ ] Enable RabbitMQ TLS by configuring `ssl_options` in `rabbitmq.conf` and mounting cert material
 - [ ] Set Grafana `GF_SERVER_PROTOCOL=https` and mount a valid TLS certificate
 - [ ] Review audit log retention policy: 90 days hot storage, 365 days cold storage
