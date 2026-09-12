@@ -284,6 +284,11 @@ ensure_overlay_network() {
 }
 
 validate_prometheus_config() {
+  if command -v promtool >/dev/null 2>&1; then
+    promtool check config "$SCRIPT_DIR/prometheus.yml" >/dev/null
+    return
+  fi
+
   docker run --rm \
     -v "$SCRIPT_DIR/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
     --entrypoint promtool \
@@ -308,7 +313,11 @@ preflight_checks() {
 
   docker info --format '{{json .}}' | jq -e '.ServerVersion' >/dev/null || fail "Docker daemon is not responding."
   ensure_overlay_network
-  validate_prometheus_config
+  if command -v promtool >/dev/null 2>&1; then
+    validate_prometheus_config
+  else
+    log_warn "promtool not found locally; Prometheus config will be validated after image pull."
+  fi
   compose config >/dev/null
   log_info "Compose syntax is valid."
 
@@ -354,6 +363,7 @@ prepare_infrastructure() {
 pull_images() {
   log_phase "Phase 3 · Pull images"
   compose pull --quiet
+  validate_prometheus_config
   log_info "Requested pulls for all images in the Compose bundle."
 }
 
@@ -371,6 +381,9 @@ start_infrastructure() {
 start_agents() {
   log_phase "Phase 5 · Start agents"
 
+  compose up -d jaeger
+  wait_for_healthy jaeger "$MAS_HEALTH_TIMEOUT"
+
   compose up -d gateway orchestrator planner memory
 
   local service
@@ -387,16 +400,38 @@ start_agents() {
 start_observability() {
   log_phase "Phase 6 · Start observability"
 
-  compose up -d prometheus grafana jaeger
+  compose up -d prometheus grafana
 
   local service
-  for service in prometheus grafana jaeger; do
+  for service in prometheus grafana; do
     wait_for_healthy "$service" "$MAS_HEALTH_TIMEOUT"
   done
 
   log_info "Grafana:    http://localhost:3000"
   log_info "Jaeger UI:  http://localhost:16686"
   log_info "Prometheus: http://localhost:9090"
+}
+
+probe_http_endpoint() {
+  local name="$1"
+  local url="$2"
+  local start_time
+
+  start_time="$(date +%s)"
+
+  while true; do
+    if curl --fail --silent --show-error "$url" >/dev/null; then
+      log_info "PASS · $name"
+      return 0
+    fi
+
+    if (( "$(date +%s)" - start_time >= MAS_HEALTH_TIMEOUT )); then
+      log_warn "FAIL · $name"
+      return 1
+    fi
+
+    sleep 2
+  done
 }
 
 smoke_tests() {
@@ -417,11 +452,9 @@ smoke_tests() {
     name="${check%%|*}"
     url="${check##*|}"
 
-    if curl --fail --silent --show-error "$url" >/dev/null; then
-      log_info "PASS · $name"
+    if probe_http_endpoint "$name" "$url"; then
       pass_count=$((pass_count + 1))
     else
-      log_warn "FAIL · $name"
       fail_count=$((fail_count + 1))
     fi
   done
