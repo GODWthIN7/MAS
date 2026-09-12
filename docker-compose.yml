@@ -1,0 +1,375 @@
+x-mas-defaults: &mas-defaults
+  restart: unless-stopped
+  networks:
+    - mas-overlay
+  logging:
+    driver: json-file
+    options:
+      max-size: "50m"
+      max-file: "5"
+
+x-agent-env: &agent-env
+  MAS_ENV: ${MAS_ENV:-production}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  HMAC_KEY: ${HMAC_KEY:-}
+  RABBITMQ_URL: amqp://mas:${RABBITMQ_PASS:-changeme}@rabbitmq:5672/%2f
+  POSTGRES_URL: postgres://mas:${POSTGRES_PASS:-changeme}@postgres:5432/mas?sslmode=disable
+  REDIS_URL: redis://:${REDIS_PASS:-changeme}@redis:6379/0
+  QDRANT_URL: http://qdrant:6333
+  VAULT_ADDR: http://vault:8200
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
+
+x-health-defaults: &health-defaults
+  interval: 10s
+  timeout: 5s
+  retries: 5
+  start_period: 20s
+
+x-log-volume: &log-volume
+  type: bind
+  source: ${MAS_LOG_DIR:-./logs}
+  target: /var/log/mas
+
+x-secrets-volume: &secrets-volume
+  type: bind
+  source: ./.secrets
+  target: /run/mas-secrets
+  read_only: true
+
+services:
+  postgres:
+    <<: *mas-defaults
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: mas
+      POSTGRES_USER: mas
+      POSTGRES_PASSWORD: ${POSTGRES_PASS:-changeme}
+    expose:
+      - "5432"
+    volumes:
+      - *log-volume
+      - mas-postgres:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mas -d mas"]
+      <<: *health-defaults
+
+  redis:
+    <<: *mas-defaults
+    image: redis:7-alpine
+    command: >
+      sh -c 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASS"'
+    environment:
+      REDIS_PASS: ${REDIS_PASS:-changeme}
+    expose:
+      - "6379"
+    volumes:
+      - *log-volume
+      - mas-redis:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASS}\" ping | grep -q PONG"]
+      <<: *health-defaults
+
+  qdrant:
+    <<: *mas-defaults
+    image: qdrant/qdrant:v1.10.0
+    expose:
+      - "6333"
+      - "6334"
+    volumes:
+      - *log-volume
+      - mas-qdrant:/qdrant/storage
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:6333/healthz >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  rabbitmq:
+    <<: *mas-defaults
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: mas
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-changeme}
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_COOKIE:-mas-secret-cookie}
+    expose:
+      - "5672"
+    ports:
+      - "15672:15672"
+    volumes:
+      - *log-volume
+      - mas-rabbitmq:/var/lib/rabbitmq
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  vault:
+    <<: *mas-defaults
+    image: hashicorp/vault:1.17
+    cap_add:
+      - IPC_LOCK
+    command: server -dev -dev-root-token-id=${VAULT_TOKEN:-root} -dev-listen-address=0.0.0.0:8200
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_TOKEN:-root}
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    ports:
+      - "8200:8200"
+    volumes:
+      - *log-volume
+    healthcheck:
+      test: ["CMD-SHELL", "vault status >/dev/null 2>&1"]
+      <<: *health-defaults
+
+  gateway:
+    <<: *mas-defaults
+    image: mas/gateway:${MAS_VERSION:-1.0.0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+    environment:
+      <<: *agent-env
+      SERVICE_NAME: gateway
+      SERVICE_PORT: "8080"
+      JWT_PUBLIC_KEY_PATH: /run/mas-secrets/jwt_public.pem
+      TLS_CERT_PATH: /run/mas-secrets/tls.crt
+      TLS_KEY_PATH: /run/mas-secrets/tls.key
+    ports:
+      - "8080:8080"
+    volumes:
+      - *log-volume
+      - *secrets-volume
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1 || wget -q -O- http://127.0.0.1:8080/health >/dev/null 2>&1"]
+      <<: *health-defaults
+
+  orchestrator:
+    <<: *mas-defaults
+    image: mas/orchestrator:${MAS_VERSION:-1.0.0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+    environment:
+      <<: *agent-env
+      SERVICE_NAME: orchestrator
+      SERVICE_PORT: "8081"
+      JWT_PRIVATE_KEY_PATH: /run/mas-secrets/jwt_private.pem
+    ports:
+      - "8081:8081"
+    volumes:
+      - *log-volume
+      - *secrets-volume
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/health >/dev/null 2>&1 || wget -q -O- http://127.0.0.1:8081/health >/dev/null 2>&1"]
+      <<: *health-defaults
+
+  planner:
+    <<: *mas-defaults
+    image: mas/planner:${MAS_VERSION:-1.0.0}
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    environment:
+      <<: *agent-env
+      SERVICE_NAME: planner
+      SERVICE_PORT: "8082"
+    ports:
+      - "8082:8082"
+    volumes:
+      - *log-volume
+      - *secrets-volume
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8082/health >/dev/null 2>&1 || wget -q -O- http://127.0.0.1:8082/health >/dev/null 2>&1"]
+      <<: *health-defaults
+
+  executor:
+    <<: *mas-defaults
+    image: mas/executor:${MAS_VERSION:-1.0.0}
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    environment:
+      <<: *agent-env
+      SERVICE_NAME: executor
+      SERVICE_PORT: "8084"
+    expose:
+      - "8084"
+    volumes:
+      - *log-volume
+      - *secrets-volume
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8084/health >/dev/null 2>&1 || wget -q -O- http://127.0.0.1:8084/health >/dev/null 2>&1"]
+      <<: *health-defaults
+
+  critic:
+    <<: *mas-defaults
+    image: mas/critic:${MAS_VERSION:-1.0.0}
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    environment:
+      <<: *agent-env
+      SERVICE_NAME: critic
+      SERVICE_PORT: "8085"
+    ports:
+      - "8085:8085"
+    volumes:
+      - *log-volume
+      - *secrets-volume
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8085/health >/dev/null 2>&1 || wget -q -O- http://127.0.0.1:8085/health >/dev/null 2>&1"]
+      <<: *health-defaults
+
+  memory:
+    <<: *mas-defaults
+    image: mas/memory:${MAS_VERSION:-1.0.0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *agent-env
+      SERVICE_NAME: memory
+      SERVICE_PORT: "8083"
+      MTLS_CA_CERT_PATH: /run/mas-secrets/ca.crt
+    ports:
+      - "8083:8083"
+    volumes:
+      - *log-volume
+      - *secrets-volume
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8083/health >/dev/null 2>&1 || wget -q -O- http://127.0.0.1:8083/health >/dev/null 2>&1"]
+      <<: *health-defaults
+
+  prometheus:
+    <<: *mas-defaults
+    image: prom/prometheus:v2.53.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    volumes:
+      - *log-volume
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:9090/-/healthy >/dev/null 2>&1"]
+      <<: *health-defaults
+
+  grafana:
+    <<: *mas-defaults
+    image: grafana/grafana:11.1.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS:-admin}
+    ports:
+      - "3000:3000"
+    volumes:
+      - *log-volume
+      - mas-grafana:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3000/api/health >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  jaeger:
+    <<: *mas-defaults
+    image: jaegertracing/all-in-one:1.58
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - *log-volume
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:16686/ >/dev/null 2>&1"]
+      <<: *health-defaults
+
+networks:
+  mas-overlay:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  mas-postgres:
+  mas-redis:
+  mas-qdrant:
+  mas-rabbitmq:
+  mas-grafana:
