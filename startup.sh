@@ -193,7 +193,7 @@ EOF
 wait_for_healthy() {
   local service="$1"
   local timeout="$2"
-  local start_time current_ids healthy_count total_count container_id status
+  local start_time current_ids healthy_count total_count container_id inspect_json has_health status
 
   start_time="$(date +%s)"
 
@@ -212,8 +212,10 @@ wait_for_healthy() {
     total_count="${#current_ids[@]}"
 
     for container_id in "${current_ids[@]}"; do
-      status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || true)"
-      if [[ "$status" == "healthy" || "$status" == "running" ]]; then
+      inspect_json="$(docker inspect "$container_id" 2>/dev/null || true)"
+      has_health="$(printf '%s' "$inspect_json" | jq -r '.[0].State.Health != null')"
+      status="$(printf '%s' "$inspect_json" | jq -r 'if .[0].State.Health != null then .[0].State.Health.Status else .[0].State.Status end')"
+      if [[ "$has_health" == "true" && "$status" == "healthy" ]] || [[ "$has_health" == "false" && "$status" == "running" ]]; then
         healthy_count=$((healthy_count + 1))
       fi
     done

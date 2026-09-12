@@ -143,7 +143,7 @@ See `./docker-compose.yml` for the full source.
 | Grafana | http://localhost:3000 | Internal | Credentials: `admin` / `$GRAFANA_PASS` |
 | Jaeger UI | http://localhost:16686 | Internal | Distributed trace explorer |
 | Prometheus | http://localhost:9090 | Internal | Raw metrics scrape targets and query UI |
-| Vault | http://localhost:8200 | Internal | Token: `$VAULT_TOKEN` |
+| Vault | http://vault:8200 | Internal | Internal container-network endpoint; token: `$VAULT_TOKEN` |
 
 ---
 
@@ -207,7 +207,7 @@ Complete all items before promoting to a production or internet-facing environme
 - [ ] Remove `VAULT_TOKEN=root`; unseal Vault properly using auto-unseal (KMS) or Shamir key shares
 - [ ] Add `.secrets/` and `.env` to `.gitignore` — verify with `git check-ignore -v .secrets/ .env`
 - [ ] Enable TLS on the Gateway by mounting real TLS cert/key into the gateway runtime secret path
-- [ ] Set `VAULT_DEV_LISTEN_ADDRESS` to an internal interface only in production (do not expose port 8200 publicly)
+- [ ] Keep Vault internal-only unless you explicitly opt into a local dev port mapping for debugging
 - [ ] Rotate HMAC key on schedule — `startup.sh` auto-rotates if > 24 h old and preserves overlap material in `.secrets/hmac_key.previous`; verify modification time with `stat .secrets/hmac_key`
 - [ ] Enable RabbitMQ TLS by configuring `ssl_options` in `rabbitmq.conf` and mounting cert material
 - [ ] Set Grafana `GF_SERVER_PROTOCOL=https` and mount a valid TLS certificate
@@ -224,7 +224,7 @@ Complete all items before promoting to a production or internet-facing environme
 | Health check consistently fails at startup | Insufficient RAM; OOM killer terminating containers | Ensure ≥ 16 GB RAM available; check `dmesg` for OOM events |
 | Gateway returns 401 Unauthorized | JWT public key mismatch between generator and gateway | Verify `jwt_public.pem` is correctly mounted into `/run/mas-secrets` |
 | RabbitMQ fails to start / crashes on boot | Erlang cluster cookie mismatch on restart | Check `RABBITMQ_COOKIE` env var; delete `mas-rabbitmq` data volume if stale state persists |
-| Qdrant container OOMKilled | 4 GB memory limit too low for loaded collections | Increase Qdrant memory limit in Compose `deploy.resources.limits` |
+| Qdrant container OOMKilled | 4 GB memory limit too low for loaded collections | Increase Qdrant memory limit in Compose `mem_limit` |
 | Smoke test FAIL on Grafana (phase 7) | Grafana is slow to initialise on first boot | Wait 60–90 seconds and re-run `./startup.sh` — subsequent runs pass |
 | `docker-compose: command not found` | Using Docker Compose v2 plugin (no standalone binary) | Use `docker compose` (space, no hyphen); alias: `alias docker-compose='docker compose'` |
 
