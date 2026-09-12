@@ -72,7 +72,7 @@ All variables are consumed by `startup.sh` and propagated into the Docker Compos
 | `RABBITMQ_PASS` | `changeme` | RabbitMQ password — MUST be changed in production |
 | `RABBITMQ_COOKIE` | `mas-secret-cookie` | Erlang cluster cookie — change in production to a high-entropy value |
 | `VAULT_TOKEN` | `root` | Vault root token — replace with proper auto-unseal or key share mechanism in production |
-| `PROMETHEUS_IMAGE` | `prom/prometheus:v2.53.0` | Prometheus image used for deployment and preflight `promtool` validation |
+| `PROMETHEUS_IMAGE` | `prom/prometheus:v2.53.0` | Prometheus image used for deployment and for fallback `promtool` validation when the local binary is unavailable |
 | `GRAFANA_PASS` | _(required)_ | Grafana administrator password |
 | `LOG_LEVEL` | `info` | Log verbosity across all agents: debug / info / warn / error |
 

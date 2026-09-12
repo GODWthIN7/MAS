@@ -146,7 +146,7 @@ ensure_jwt_keypair() {
 ensure_grafana_password_file() {
   local grafana_pass_file="$SCRIPT_DIR/.secrets/grafana_pass"
 
-  if [[ -f "$grafana_pass_file" ]] && [[ -z "$GRAFANA_PASS" ]]; then
+  if [[ -f "$grafana_pass_file" ]]; then
     log_info "Reusing existing Grafana password file."
     return
   fi
@@ -161,7 +161,12 @@ ensure_grafana_password_file() {
 }
 
 dotenv_quote() {
-  "$PYTHON_BIN" -c 'import json, sys; print(json.dumps(sys.argv[1]))' "$1"
+  "$PYTHON_BIN" - "$1" <<'PY'
+import sys
+
+value = sys.argv[1].replace("\\", "\\\\").replace("'", "\\'")
+print("'" + value + "'")
+PY
 }
 
 write_env_file() {
