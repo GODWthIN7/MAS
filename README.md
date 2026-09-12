@@ -86,7 +86,7 @@ The startup script implements a 7-phase sequential boot sequence with colour-cod
 
 | Phase | Function | What It Does |
 |---|---|---|
-| 0 | `preflight_checks()` | Verifies required tools (docker, Docker Compose plugin or docker-compose, Python, curl, jq, openssl), Docker daemon responsiveness, Compose file presence and syntax validity, and ≥ 10 GB free disk space |
+| 0 | `preflight_checks()` | Verifies required tools (docker, Docker Compose plugin or docker-compose, Python, curl, jq, openssl), Docker daemon responsiveness, Prometheus config validity, Compose file presence and syntax validity, and ≥ 10 GB free disk space |
 | 1 | `bootstrap_secrets()` | Generates 256-bit HMAC-SHA256 signing key (auto-rotates if > 24 h old while retaining the previous key for overlap rollout), RS256 4096-bit JWT key pair, mTLS CA certificate (365-day validity), and writes `.env` |
 | 2 | `prepare_infrastructure()` | Creates `mas-overlay` bridge network (172.28.0.0/16) and 5 named Docker volumes if absent; creates the host log directory |
 | 3 | `pull_images()` | Pulls all service images defined in `docker-compose.yml` using Compose pull in quiet mode |
@@ -211,7 +211,7 @@ Complete all items before promoting to a production or internet-facing environme
 - [ ] Verify `.secrets/` and `.env` remain ignored by Git — check with `git check-ignore -v .secrets/ .env`
 - [ ] Enable TLS on the Gateway by wiring real TLS certificate and key material into the gateway container configuration
 - [ ] Keep Vault internal-only unless you explicitly opt into a local dev port mapping for debugging
-- [ ] Rotate HMAC key on schedule — `startup.sh` auto-rotates if > 24 h old and preserves overlap material in `.secrets/hmac_key.previous`; verify modification time with `stat .secrets/hmac_key`
+- [ ] Rotate HMAC key on schedule — `startup.sh` auto-rotates if > 24 h old and preserves overlap material in `.secrets/hmac_key.previous`; verify modification time with `stat -c %y .secrets/hmac_key` (Linux) or `stat -f %Sm .secrets/hmac_key` (macOS)
 - [ ] Enable RabbitMQ TLS by configuring `ssl_options` in `rabbitmq.conf` and mounting cert material
 - [ ] Set Grafana `GF_SERVER_PROTOCOL=https` and mount a valid TLS certificate
 - [ ] Review audit log retention policy: 90 days hot storage, 365 days cold storage

@@ -226,8 +226,9 @@ wait_for_healthy() {
       if [[ -z "$inspect_json" ]]; then
         continue
       fi
-      has_health="$(printf '%s' "$inspect_json" | jq -r '.[0].State.Health != null')"
-      status="$(printf '%s' "$inspect_json" | jq -r 'if .[0].State.Health != null then .[0].State.Health.Status else .[0].State.Status end')"
+      IFS=$'\t' read -r has_health status <<EOF
+$(printf '%s' "$inspect_json" | jq -r '[.[0].State.Health != null, (if .[0].State.Health != null then .[0].State.Health.Status else .[0].State.Status end)] | @tsv')
+EOF
       if [[ "$has_health" == "true" && "$status" == "healthy" ]] || [[ "$has_health" == "false" && "$status" == "running" ]]; then
         healthy_count=$((healthy_count + 1))
       fi
@@ -282,6 +283,14 @@ ensure_overlay_network() {
     docker network create --driver bridge --subnet 172.28.0.0/16 mas-overlay >/dev/null
 }
 
+validate_prometheus_config() {
+  docker run --rm \
+    -v "$SCRIPT_DIR/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+    --entrypoint promtool \
+    prom/prometheus:v2.53.0 \
+    check config /etc/prometheus/prometheus.yml >/dev/null
+}
+
 preflight_checks() {
   log_phase "Phase 0 · Preflight checks"
 
@@ -299,6 +308,7 @@ preflight_checks() {
 
   docker info --format '{{json .}}' | jq -e '.ServerVersion' >/dev/null || fail "Docker daemon is not responding."
   ensure_overlay_network
+  validate_prometheus_config
   compose config >/dev/null
   log_info "Compose syntax is valid."
 
