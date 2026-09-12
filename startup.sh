@@ -203,7 +203,12 @@ wait_for_healthy() {
   start_time="$(date +%s)"
 
   while true; do
-    mapfile -t current_ids < <(compose ps -q "$service" | sed '/^$/d')
+    current_ids=()
+    while IFS= read -r container_id; do
+      if [[ -n "$container_id" ]]; then
+        current_ids+=("$container_id")
+      fi
+    done < <(compose ps -q "$service" | sed '/^$/d')
 
     if [[ "${#current_ids[@]}" -eq 0 ]]; then
       if (( "$(date +%s)" - start_time >= timeout )); then

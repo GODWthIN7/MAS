@@ -138,7 +138,7 @@ See `./docker-compose.yml` for the full source.
 
 | Service | URL | Access | Notes |
 |---|---|---|---|
-| Gateway API | http://localhost:8080 | Public | Primary external interface; rate-limited to 1000 RPS |
+| Gateway API | http://localhost:8080 | Public | Primary external interface |
 | Orchestrator | http://localhost:8081 | Internal | `/health`, `/ready`, `/metrics` |
 | Planner | http://localhost:8082 | Internal | `/health`, `/ready` |
 | Memory | http://localhost:8083 | Internal | `/health`, `/ready`, `/query` |
@@ -228,7 +228,7 @@ Complete all items before promoting to a production or internet-facing environme
 | Gateway returns 401 Unauthorized | JWT public key mismatch between generator and gateway | Verify `jwt_public.pem` is correctly mounted into `/run/mas-secrets` |
 | RabbitMQ fails to start / crashes on boot | Erlang cluster cookie mismatch on restart | Check `RABBITMQ_COOKIE` env var; delete `mas-rabbitmq` data volume if stale state persists |
 | Qdrant container OOMKilled | 4 GB memory limit too low for loaded collections | Increase Qdrant memory limit in Compose `mem_limit` |
-| Smoke test FAIL on Grafana (phase 7) | Grafana is slow to initialise on first boot | Wait 60–90 seconds and re-run `./startup.sh` — subsequent runs pass |
+| Smoke test FAIL on Grafana (phase 7) | Grafana is slow to initialise on first boot | Wait 60–90 seconds, check `docker compose ps grafana`, then retry `curl http://localhost:3000/api/health` |
 | `docker-compose: command not found` | Using Docker Compose v2 plugin (no standalone binary) | Use `docker compose` (space, no hyphen); alias: `alias docker-compose='docker compose'` |
 
 ---
