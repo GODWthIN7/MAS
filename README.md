@@ -42,6 +42,12 @@ cp .env.example .env
 docker compose up --build
 ```
 
+To run the test stage inside Docker:
+
+```bash
+docker build --target test .
+```
+
 ## Configuration
 
 Application configuration is environment-variable based. Keep real secrets in your local `.env`, deployment platform settings, or a secret manager. Do not commit secrets to the repository.
