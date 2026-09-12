@@ -105,7 +105,10 @@ ensure_hmac_key() {
     log_warn "Rotating stale HMAC key; previous key retained for overlap rollout."
   fi
 
-  openssl rand -hex 32 >"$hmac_file"
+  (
+    umask 077
+    openssl rand -hex 32 >"$hmac_file"
+  )
   chmod 600 "$hmac_file"
   log_info "Generated fresh 256-bit HMAC key."
 }
@@ -118,8 +121,11 @@ ensure_jwt_keypair() {
     return
   fi
 
-  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out "$private_key" >/dev/null 2>&1
-  openssl rsa -in "$private_key" -pubout -out "$public_key" >/dev/null 2>&1
+  (
+    umask 077
+    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out "$private_key" >/dev/null 2>&1
+    openssl rsa -in "$private_key" -pubout -out "$public_key" >/dev/null 2>&1
+  )
   chmod 600 "$private_key" "$public_key"
   log_info "Generated RS256 4096-bit JWT key pair."
 }
@@ -132,30 +138,20 @@ ensure_ca_material() {
     return
   fi
 
-  openssl req -x509 -nodes -newkey rsa:4096 \
-    -keyout "$ca_key" \
-    -out "$ca_crt" \
-    -days 365 \
-    -subj "/CN=MAS Local CA" >/dev/null 2>&1
+  (
+    umask 077
+    openssl req -x509 -nodes -newkey rsa:4096 \
+      -keyout "$ca_key" \
+      -out "$ca_crt" \
+      -days 365 \
+      -subj "/CN=MAS Local CA" >/dev/null 2>&1
+  )
   chmod 600 "$ca_key" "$ca_crt"
   log_info "Generated mTLS CA certificate (365 days)."
 }
 
-ensure_gateway_tls() {
-  local tls_key="$SCRIPT_DIR/.secrets/tls.key"
-  local tls_crt="$SCRIPT_DIR/.secrets/tls.crt"
-
-  if [[ -f "$tls_key" && -f "$tls_crt" ]]; then
-    return
-  fi
-
-  openssl req -x509 -nodes -newkey rsa:4096 \
-    -keyout "$tls_key" \
-    -out "$tls_crt" \
-    -days 365 \
-    -subj "/CN=localhost" >/dev/null 2>&1
-  chmod 600 "$tls_key" "$tls_crt"
-  log_info "Generated self-signed gateway TLS certificate for localhost."
+dotenv_quote() {
+  python -c 'import json, sys; print(json.dumps(sys.argv[1]))' "$1"
 }
 
 write_env_file() {
@@ -167,23 +163,21 @@ write_env_file() {
   fi
 
   {
-    cat <<EOF
-MAS_ENV=$MAS_ENV
-MAS_VERSION=$MAS_VERSION
-MAS_COMPOSE_FILE=$MAS_COMPOSE_FILE
-MAS_LOG_DIR=$MAS_LOG_DIR
-MAS_HEALTH_TIMEOUT=$MAS_HEALTH_TIMEOUT
-POSTGRES_PASS=$POSTGRES_PASS
-REDIS_PASS=$REDIS_PASS
-RABBITMQ_PASS=$RABBITMQ_PASS
-RABBITMQ_COOKIE=$RABBITMQ_COOKIE
-VAULT_TOKEN=$VAULT_TOKEN
-GRAFANA_PASS=$GRAFANA_PASS
-LOG_LEVEL=$LOG_LEVEL
-HMAC_KEY=$hmac_key
-EOF
+    printf 'MAS_ENV=%s\n' "$(dotenv_quote "$MAS_ENV")"
+    printf 'MAS_VERSION=%s\n' "$(dotenv_quote "$MAS_VERSION")"
+    printf 'MAS_COMPOSE_FILE=%s\n' "$(dotenv_quote "$MAS_COMPOSE_FILE")"
+    printf 'MAS_LOG_DIR=%s\n' "$(dotenv_quote "$MAS_LOG_DIR")"
+    printf 'MAS_HEALTH_TIMEOUT=%s\n' "$(dotenv_quote "$MAS_HEALTH_TIMEOUT")"
+    printf 'POSTGRES_PASS=%s\n' "$(dotenv_quote "$POSTGRES_PASS")"
+    printf 'REDIS_PASS=%s\n' "$(dotenv_quote "$REDIS_PASS")"
+    printf 'RABBITMQ_PASS=%s\n' "$(dotenv_quote "$RABBITMQ_PASS")"
+    printf 'RABBITMQ_COOKIE=%s\n' "$(dotenv_quote "$RABBITMQ_COOKIE")"
+    printf 'VAULT_TOKEN=%s\n' "$(dotenv_quote "$VAULT_TOKEN")"
+    printf 'GRAFANA_PASS=%s\n' "$(dotenv_quote "$GRAFANA_PASS")"
+    printf 'LOG_LEVEL=%s\n' "$(dotenv_quote "$LOG_LEVEL")"
+    printf 'HMAC_KEY=%s\n' "$(dotenv_quote "$hmac_key")"
     if [[ -n "$previous_hmac_key" ]]; then
-      printf 'HMAC_PREVIOUS_KEY=%s\n' "$previous_hmac_key"
+      printf 'HMAC_PREVIOUS_KEY=%s\n' "$(dotenv_quote "$previous_hmac_key")"
     fi
   } >"$SCRIPT_DIR/.env"
   chmod 600 "$SCRIPT_DIR/.env"
@@ -303,7 +297,6 @@ bootstrap_secrets() {
   ensure_hmac_key
   ensure_jwt_keypair
   ensure_ca_material
-  ensure_gateway_tls
   write_env_file
 }
 

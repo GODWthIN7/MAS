@@ -149,8 +149,6 @@ services:
       SERVICE_NAME: gateway
       SERVICE_PORT: "8080"
       JWT_PUBLIC_KEY_PATH: /run/mas-secrets/jwt_public.pem
-      TLS_CERT_PATH: /run/mas-secrets/tls.crt
-      TLS_KEY_PATH: /run/mas-secrets/tls.key
     ports:
       - "8080:8080"
     volumes:

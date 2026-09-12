@@ -6,6 +6,8 @@ Master Prompt: *Precision · Resilience · Transparency*
 
 Environment: Linux (Ubuntu 22.04+) / macOS 13+
 
+> **Bundle Scope:** This bundle is suitable for internal and local deployment rehearsal. Before any real production rollout, replace the bundled internal-only Vault development configuration, enable Gateway TLS, and complete the full security checklist below.
+
 ---
 
 ## Table of Contents
@@ -27,7 +29,7 @@ Environment: Linux (Ubuntu 22.04+) / macOS 13+
 **Three-Step Startup**
 
 1. Make the startup script executable: `chmod +x startup.sh`
-2. Launch in production mode: `MAS_ENV=production ./startup.sh`
+2. Launch the bundle: `MAS_ENV=staging ./startup.sh`
 3. Open the Gateway API: http://localhost:8080
 
 > **Note:** Full startup takes approximately 3–5 minutes on first run due to image pulls. Subsequent starts complete in approximately 60 seconds once images are cached locally.
@@ -54,7 +56,7 @@ The Phase 0 preflight check validates tools automatically, but host-level resour
 
 ## 3. Environment Variables Reference
 
-All variables are consumed by `startup.sh` and propagated into the Docker Compose environment. Override any variable by exporting it before invoking the startup script, or by editing a project-local `.env` file. The script writes a minimal `.env` at Phase 1 (secret bootstrapping).
+All variables are consumed by `startup.sh` and propagated into the Docker Compose environment. Override any variable by exporting it before invoking the startup script. The script writes a minimal `.env` at Phase 1 (secret bootstrapping) for subsequent Compose operations.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -152,43 +154,43 @@ See `./docker-compose.yml` for the full source.
 Live logs from all services:
 
 ```bash
-docker-compose logs -f
+docker compose logs -f
 ```
 
 Live logs from a specific service:
 
 ```bash
-docker-compose logs -f orchestrator
+docker compose logs -f orchestrator
 ```
 
 Scale executor pool up or down:
 
 ```bash
-docker-compose up -d --scale executor=5
+docker compose up -d --scale executor=5
 ```
 
 Check container health status:
 
 ```bash
-docker-compose ps
+docker compose ps
 ```
 
 Graceful shutdown (30-second drain):
 
 ```bash
-docker-compose down --timeout 30
+docker compose down --timeout 30
 ```
 
 Hard stop + remove volumes — **DESTRUCTIVE** — all persistent data lost:
 
 ```bash
-docker-compose down -v
+docker compose down -v
 ```
 
 Rotate HMAC signing key manually with overlap material retained and restart affected services:
 
 ```bash
-cp .secrets/hmac_key .secrets/hmac_key.previous && openssl rand -hex 32 > .secrets/hmac_key && docker-compose restart orchestrator gateway
+cp .secrets/hmac_key .secrets/hmac_key.previous && openssl rand -hex 32 > .secrets/hmac_key && docker compose restart orchestrator gateway
 ```
 
 Force Prometheus configuration reload (no container restart required):
@@ -206,7 +208,7 @@ Complete all items before promoting to a production or internet-facing environme
 - [ ] Replace all `changeme` passwords (`POSTGRES_PASS`, `REDIS_PASS`, `RABBITMQ_PASS`) before going live
 - [ ] Remove `VAULT_TOKEN=root`; unseal Vault properly using auto-unseal (KMS) or Shamir key shares
 - [ ] Verify `.secrets/` and `.env` remain ignored by Git — check with `git check-ignore -v .secrets/ .env`
-- [ ] Enable TLS on the Gateway by mounting real TLS cert/key into the gateway runtime secret path
+- [ ] Enable TLS on the Gateway by wiring real TLS certificate and key material into the gateway container configuration
 - [ ] Keep Vault internal-only unless you explicitly opt into a local dev port mapping for debugging
 - [ ] Rotate HMAC key on schedule — `startup.sh` auto-rotates if > 24 h old and preserves overlap material in `.secrets/hmac_key.previous`; verify modification time with `stat .secrets/hmac_key`
 - [ ] Enable RabbitMQ TLS by configuring `ssl_options` in `rabbitmq.conf` and mounting cert material
