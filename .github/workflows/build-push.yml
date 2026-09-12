@@ -48,6 +48,7 @@ jobs:
           password: ${{ env.DOCKER_PASSWORD }}
 
       - name: Extract metadata
+        if: github.event_name != 'pull_request'
         id: meta
         uses: docker/metadata-action@v5
         with:
