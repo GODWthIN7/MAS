@@ -120,7 +120,7 @@ services:
     image: hashicorp/vault:1.17
     cap_add:
       - IPC_LOCK
-    command: server -dev -dev-root-token-id=${VAULT_TOKEN:-root} -dev-listen-address=0.0.0.0:8200
+    command: server -dev
     environment:
       VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_TOKEN:-root}
       VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
@@ -281,7 +281,7 @@ services:
 
   prometheus:
     <<: *mas-defaults
-    image: prom/prometheus:v2.53.0
+    image: ${PROMETHEUS_IMAGE:-prom/prometheus:v2.53.0}
     networks:
       - mas-overlay
     command:
@@ -301,7 +301,7 @@ services:
     image: grafana/grafana:11.1.0
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS:?GRAFANA_PASS must be set}
     ports:
       - "3000:3000"
     volumes:

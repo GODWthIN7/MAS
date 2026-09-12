@@ -29,7 +29,7 @@ Environment: Linux (Ubuntu 22.04+) / macOS 13+
 **Three-Step Startup**
 
 1. Make the startup script executable: `chmod +x startup.sh`
-2. Launch the bundle: `MAS_ENV=staging ./startup.sh`
+2. Launch the bundle: `GRAFANA_PASS='change-me' MAS_ENV=staging ./startup.sh`
 3. Open the Gateway API: http://localhost:8080
 
 > **Note:** Full startup takes approximately 3–5 minutes on first run due to image pulls. Subsequent starts complete in approximately 60 seconds once images are cached locally.
@@ -71,7 +71,8 @@ All variables are consumed by `startup.sh` and propagated into the Docker Compos
 | `RABBITMQ_PASS` | `changeme` | RabbitMQ password — MUST be changed in production |
 | `RABBITMQ_COOKIE` | `mas-secret-cookie` | Erlang cluster cookie — change in production to a high-entropy value |
 | `VAULT_TOKEN` | `root` | Vault root token — replace with proper auto-unseal or key share mechanism in production |
-| `GRAFANA_PASS` | `admin` | Grafana administrator password |
+| `PROMETHEUS_IMAGE` | `prom/prometheus:v2.53.0` | Prometheus image used for deployment and preflight `promtool` validation |
+| `GRAFANA_PASS` | _(required)_ | Grafana administrator password |
 | `LOG_LEVEL` | `info` | Log verbosity across all agents: debug / info / warn / error |
 
 > **Security Warning:** Never commit `.env` or the `.secrets/` directory to version control. Both are already added to `.gitignore`. The `.secrets/` directory contains plaintext private keys and HMAC material. The generated `.env` file contains the live HMAC signing key and, during coordinated key rotation, may also include `HMAC_PREVIOUS_KEY` for overlap verification.
@@ -143,7 +144,7 @@ See `./docker-compose.yml` for the full source.
 | Planner | http://localhost:8082 | Internal | `/health`, `/ready` |
 | Memory | http://localhost:8083 | Internal | `/health`, `/ready`, `/query` |
 | RabbitMQ Mgmt | http://localhost:15672 | Internal | Credentials: `mas` / `$RABBITMQ_PASS` |
-| Grafana | http://localhost:3000 | Internal | Credentials: `admin` / `$GRAFANA_PASS` |
+| Grafana | http://localhost:3000 | Internal | Credentials: `admin` / configured `GRAFANA_PASS` |
 | Jaeger UI | http://localhost:16686 | Internal | Distributed trace explorer |
 | Prometheus | http://localhost:9090 | Internal | Raw metrics scrape targets and query UI |
 | Vault | http://vault:8200 | Internal | Internal container-network endpoint; token: `$VAULT_TOKEN` |
@@ -191,7 +192,7 @@ docker compose down -v
 Rotate HMAC signing key manually with overlap material retained and restart affected services:
 
 ```bash
-cp .secrets/hmac_key .secrets/hmac_key.previous && openssl rand -hex 32 > .secrets/hmac_key && docker compose restart orchestrator gateway
+cp .secrets/hmac_key .secrets/hmac_key.previous && openssl rand -hex 32 > .secrets/hmac_key && GRAFANA_PASS='your-grafana-password' ./startup.sh
 ```
 
 Force Prometheus configuration reload (no container restart required):

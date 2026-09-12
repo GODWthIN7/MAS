@@ -9,12 +9,13 @@ MAS_VERSION="${MAS_VERSION:-1.0.0}"
 MAS_COMPOSE_FILE="${MAS_COMPOSE_FILE:-docker-compose.yml}"
 MAS_LOG_DIR="${MAS_LOG_DIR:-./logs}"
 MAS_HEALTH_TIMEOUT="${MAS_HEALTH_TIMEOUT:-120}"
+PROMETHEUS_IMAGE="${PROMETHEUS_IMAGE:-prom/prometheus:v2.53.0}"
 POSTGRES_PASS="${POSTGRES_PASS:-changeme}"
 REDIS_PASS="${REDIS_PASS:-changeme}"
 RABBITMQ_PASS="${RABBITMQ_PASS:-changeme}"
 RABBITMQ_COOKIE="${RABBITMQ_COOKIE:-mas-secret-cookie}"
 VAULT_TOKEN="${VAULT_TOKEN:-root}"
-GRAFANA_PASS="${GRAFANA_PASS:-admin}"
+GRAFANA_PASS="${GRAFANA_PASS:-}"
 LOG_LEVEL="${LOG_LEVEL:-info}"
 
 readonly SCRIPT_DIR
@@ -179,6 +180,7 @@ write_env_file() {
     printf 'MAS_COMPOSE_FILE=%s\n' "$(dotenv_quote "$MAS_COMPOSE_FILE")"
     printf 'MAS_LOG_DIR=%s\n' "$(dotenv_quote "$MAS_LOG_DIR")"
     printf 'MAS_HEALTH_TIMEOUT=%s\n' "$(dotenv_quote "$MAS_HEALTH_TIMEOUT")"
+    printf 'PROMETHEUS_IMAGE=%s\n' "$(dotenv_quote "$PROMETHEUS_IMAGE")"
     printf 'POSTGRES_PASS=%s\n' "$(dotenv_quote "$POSTGRES_PASS")"
     printf 'REDIS_PASS=%s\n' "$(dotenv_quote "$REDIS_PASS")"
     printf 'RABBITMQ_PASS=%s\n' "$(dotenv_quote "$RABBITMQ_PASS")"
@@ -198,7 +200,7 @@ write_env_file() {
 wait_for_healthy() {
   local service="$1"
   local timeout="$2"
-  local start_time current_ids healthy_count total_count container_id inspect_json has_health status
+  local start_time current_ids healthy_count total_count container_id inspect_json
 
   start_time="$(date +%s)"
 
@@ -218,21 +220,13 @@ wait_for_healthy() {
       continue
     fi
 
-    healthy_count=0
     total_count="${#current_ids[@]}"
-
-    for container_id in "${current_ids[@]}"; do
-      inspect_json="$(docker inspect "$container_id" 2>/dev/null || true)"
-      if [[ -z "$inspect_json" ]]; then
-        continue
-      fi
-      IFS=$'\t' read -r has_health status <<EOF
-$(printf '%s' "$inspect_json" | jq -r '[.[0].State.Health != null, (if .[0].State.Health != null then .[0].State.Health.Status else .[0].State.Status end)] | @tsv')
-EOF
-      if [[ "$has_health" == "true" && "$status" == "healthy" ]] || [[ "$has_health" == "false" && "$status" == "running" ]]; then
-        healthy_count=$((healthy_count + 1))
-      fi
-    done
+    inspect_json="$(docker inspect "${current_ids[@]}" 2>/dev/null || true)"
+    if [[ -z "$inspect_json" ]]; then
+      sleep 2
+      continue
+    fi
+    healthy_count="$(printf '%s' "$inspect_json" | jq '[.[] | ((.State.Health != null and .State.Health.Status == "healthy") or (.State.Health == null and .State.Status == "running")) | select(.)] | length')"
 
     if [[ "$healthy_count" -eq "$total_count" ]]; then
       log_info "Service '$service' is healthy (${healthy_count}/${total_count})."
@@ -292,7 +286,7 @@ validate_prometheus_config() {
   docker run --rm \
     -v "$SCRIPT_DIR/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
     --entrypoint promtool \
-    prom/prometheus:v2.53.0 \
+    "$PROMETHEUS_IMAGE" \
     check config /etc/prometheus/prometheus.yml >/dev/null
 }
 
@@ -303,16 +297,14 @@ preflight_checks() {
   command -v curl >/dev/null 2>&1 || fail "curl is required."
   command -v jq >/dev/null 2>&1 || fail "jq is required."
   command -v openssl >/dev/null 2>&1 || fail "openssl is required."
+  [[ -n "$GRAFANA_PASS" ]] || fail "GRAFANA_PASS must be set before startup."
 
   detect_compose
   detect_python
 
   COMPOSE_FILE_PATH="$(resolve_path "$MAS_COMPOSE_FILE")"
-
   [[ -f "$COMPOSE_FILE_PATH" ]] || fail "Compose file not found: $COMPOSE_FILE_PATH"
-
   docker info --format '{{json .}}' | jq -e '.ServerVersion' >/dev/null || fail "Docker daemon is not responding."
-  ensure_overlay_network
   if command -v promtool >/dev/null 2>&1; then
     validate_prometheus_config
   else
