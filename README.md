@@ -83,7 +83,7 @@ The startup script implements a 7-phase sequential boot sequence with colour-cod
 
 | Phase | Function | What It Does |
 |---|---|---|
-| 0 | `preflight_checks()` | Verifies required tools (docker, docker-compose, curl, jq, openssl), Docker daemon responsiveness, Compose file presence and syntax validity, and ≥ 10 GB free disk space |
+| 0 | `preflight_checks()` | Verifies required tools (docker, Docker Compose plugin or docker-compose, curl, jq, openssl), Docker daemon responsiveness, Compose file presence and syntax validity, and ≥ 10 GB free disk space |
 | 1 | `bootstrap_secrets()` | Generates 256-bit HMAC-SHA256 signing key (auto-rotates if > 24 h old), RS256 4096-bit JWT key pair, mTLS CA certificate (365-day validity), and writes `.env` |
 | 2 | `prepare_infrastructure()` | Creates `mas-overlay` bridge network (172.28.0.0/16) and 5 named Docker volumes if absent; creates the host log directory |
 | 3 | `pull_images()` | Pulls all 14 service images defined in `docker-compose.yml` using Compose pull in quiet mode |
@@ -92,7 +92,7 @@ The startup script implements a 7-phase sequential boot sequence with colour-cod
 | 6 | `start_observability()` | Starts prometheus, grafana, jaeger and logs their dashboard URLs |
 | 7 | `smoke_tests()` | Runs 5 curl-based endpoint checks against Gateway, Orchestrator, Memory, Grafana, and Prometheus; reports PASS / FAIL count |
 
-See `/home/runner/work/MAS/MAS/startup.sh` for the full source.
+See `./startup.sh` for the full source.
 
 ---
 
@@ -127,7 +127,7 @@ All 7 agent containers additionally inherit the `&agent-env` environment block v
 
 Every service in the Compose file defines a Docker health check. The general pattern across all services is: `interval: 10–15s | timeout: 5–10s | retries: 5 | start_period: 20–40s`. Infrastructure services with longer startup windows (RabbitMQ, Qdrant) use a higher `start_period`. The startup script's `wait_for_healthy()` function polls the health status by reading `docker inspect --format='{{.State.Health.Status}}'` on a 2-second loop until healthy or the configured timeout is exceeded.
 
-See `/home/runner/work/MAS/MAS/docker-compose.yml` for the full source.
+See `./docker-compose.yml` for the full source.
 
 ---
 

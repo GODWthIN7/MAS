@@ -334,6 +334,7 @@ start_agents() {
 
   compose up -d --scale executor=3 executor critic
   wait_for_scale executor 3 "$MAS_HEALTH_TIMEOUT"
+  wait_for_healthy executor "$MAS_HEALTH_TIMEOUT"
   wait_for_healthy critic "$MAS_HEALTH_TIMEOUT"
 }
 
