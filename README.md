@@ -125,7 +125,7 @@ All 7 agent containers additionally inherit the `&agent-env` environment block v
 
 ### Health Check Defaults
 
-Every service in the Compose file defines a Docker health check. The general pattern across all services is: `interval: 10–15s | timeout: 5–10s | retries: 5 | start_period: 20–40s`. Infrastructure services with longer startup windows (RabbitMQ, Qdrant) use a higher `start_period`. The startup script's `wait_for_healthy()` function polls the health status by reading `docker inspect --format='{{.State.Health.Status}}'` on a 2-second loop until healthy or the configured timeout is exceeded.
+Every service in the Compose file defines a Docker health check. The general pattern across all services is: `interval: 10–15s | timeout: 5–10s | retries: 5 | start_period: 20–40s`. Infrastructure services with longer startup windows (RabbitMQ, Qdrant) use a higher `start_period`. The startup script's `wait_for_healthy()` function polls each container by reading `docker inspect` JSON and parsing the health state with `jq` on a 2-second loop until healthy or the configured timeout is exceeded.
 
 See `./docker-compose.yml` for the full source.
 
@@ -205,7 +205,7 @@ Complete all items before promoting to a production or internet-facing environme
 
 - [ ] Replace all `changeme` passwords (`POSTGRES_PASS`, `REDIS_PASS`, `RABBITMQ_PASS`) before going live
 - [ ] Remove `VAULT_TOKEN=root`; unseal Vault properly using auto-unseal (KMS) or Shamir key shares
-- [ ] Add `.secrets/` and `.env` to `.gitignore` — verify with `git check-ignore -v .secrets/ .env`
+- [ ] Verify `.secrets/` and `.env` remain ignored by Git — check with `git check-ignore -v .secrets/ .env`
 - [ ] Enable TLS on the Gateway by mounting real TLS cert/key into the gateway runtime secret path
 - [ ] Keep Vault internal-only unless you explicitly opt into a local dev port mapping for debugging
 - [ ] Rotate HMAC key on schedule — `startup.sh` auto-rotates if > 24 h old and preserves overlap material in `.secrets/hmac_key.previous`; verify modification time with `stat .secrets/hmac_key`
