@@ -14,3 +14,4 @@ async def test_healthcheck() -> None:
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+    assert response.json()["environment"] == "development"
