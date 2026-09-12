@@ -7,17 +7,19 @@ WORKDIR /code
 
 COPY pyproject.toml /code/
 COPY README.md /code/
-COPY app /code/app
 
 FROM base AS test
 
-RUN pip install --no-cache-dir ".[dev]"
-
+COPY app /code/app
 COPY tests /code/tests
+
+RUN pip install --no-cache-dir ".[dev]"
 
 CMD ["pytest"]
 
 FROM base AS runtime
+
+COPY app /code/app
 
 RUN pip install --no-cache-dir .
 

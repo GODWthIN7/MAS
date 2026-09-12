@@ -2,7 +2,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.core.config import get_settings
-from app.main import app
+from app.main import create_app
 
 
 @pytest.fixture(autouse=True)
@@ -14,6 +14,8 @@ def reset_settings_cache() -> None:
 
 @pytest.mark.anyio
 async def test_healthcheck() -> None:
+    app = create_app()
+
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://testserver",
@@ -30,6 +32,10 @@ async def test_healthcheck_uses_environment_configuration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("APP_ENV", "staging")
+    monkeypatch.setenv("APP_NAME", "MAS Staging API")
+    monkeypatch.setenv("DEBUG", "true")
+
+    app = create_app()
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -39,3 +45,5 @@ async def test_healthcheck_uses_environment_configuration(
 
     assert response.status_code == 200
     assert response.json()["environment"] == "staging"
+    assert app.title == "MAS Staging API"
+    assert app.debug is True
