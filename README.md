@@ -47,7 +47,7 @@ The Phase 0 preflight check validates tools automatically, but host-level resour
 | Python | 3.10+ — used to safely serialize generated `.env` values for Compose |
 | curl | Any recent version — used for health polling and smoke tests |
 | jq | 1.6+ — used for JSON inspection in preflight daemon validation and diagnostic commands |
-| openssl | 3.0+ — required for secret generation (HMAC, RSA 4096, mTLS CA) |
+| openssl | 3.0+ — required for secret generation (HMAC, RSA 4096) |
 | Disk space | ≥ 10 GB free (preflight warns if below threshold) |
 | RAM | ≥ 16 GB recommended (Qdrant + Memory agent each consume up to 4 GB) |
 | CPU | ≥ 4 cores recommended; executor pool runs ×3 replicas at 2.0 CPU each |
@@ -89,7 +89,7 @@ The startup script implements an 8-phase sequential boot sequence with colour-co
 | Phase | Function | What It Does |
 |---|---|---|
 | 0 | `preflight_checks()` | Verifies required tools (docker, Docker Compose plugin or docker-compose, Python, curl, jq, openssl), Docker daemon responsiveness, Compose file presence and syntax validity, and ≥ 10 GB free disk space |
-| 1 | `bootstrap_secrets()` | Generates a 256-bit HMAC-SHA256 signing key, optionally rotates it when `MAS_ROTATE_HMAC=true` while retaining the previous key for overlap rollout, generates an RS256 4096-bit JWT key pair, writes an mTLS CA certificate (365-day validity), and writes `.env` |
+| 1 | `bootstrap_secrets()` | Generates a 256-bit HMAC-SHA256 signing key, optionally rotates it when `MAS_ROTATE_HMAC=true` while retaining the previous key for overlap rollout, generates an RS256 4096-bit JWT key pair, writes the Grafana password file under `.secrets/`, and writes `.env` |
 | 2 | `prepare_infrastructure()` | Creates `mas-overlay` bridge network (172.28.0.0/16) and 5 named Docker volumes if absent; creates the host log directory |
 | 3 | `pull_images()` | Pulls all service images defined in `docker-compose.yml` using Compose pull in quiet mode and validates `prometheus.yml` with `promtool` |
 | 4 | `start_infrastructure()` | Starts postgres, redis, qdrant, rabbitmq with per-service health polling and configurable timeouts |

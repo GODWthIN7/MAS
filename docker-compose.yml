@@ -264,7 +264,6 @@ services:
       <<: *agent-env
       SERVICE_NAME: memory
       SERVICE_PORT: "8083"
-      MTLS_CA_CERT_PATH: /run/mas-secrets/ca.crt
     ports:
       - "8083:8083"
     volumes:
@@ -298,11 +297,12 @@ services:
     image: grafana/grafana:11.1.0
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASS:?GRAFANA_PASS must be set}
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/mas-secrets/grafana_pass
     ports:
       - "3000:3000"
     volumes:
       - *log-volume
+      - *secrets-volume
       - mas-grafana:/var/lib/grafana
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3000/api/health >/dev/null 2>&1"]

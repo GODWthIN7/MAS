@@ -143,28 +143,21 @@ ensure_jwt_keypair() {
   log_info "Generated RS256 4096-bit JWT key pair."
 }
 
-ensure_ca_certificate() {
-  local ca_crt="$SCRIPT_DIR/.secrets/ca.crt"
-  local temp_dir
-  local temp_key
+ensure_grafana_password_file() {
+  local grafana_pass_file="$SCRIPT_DIR/.secrets/grafana_pass"
 
-  if [[ -f "$ca_crt" ]]; then
+  if [[ -f "$grafana_pass_file" ]] && [[ -z "$GRAFANA_PASS" ]]; then
+    log_info "Reusing existing Grafana password file."
     return
   fi
 
-  temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/mas-ca.XXXXXX")"
-  temp_key="$temp_dir/ca.key"
+  [[ -n "$GRAFANA_PASS" ]] || fail "GRAFANA_PASS must be set before first startup."
   (
     umask 077
-    openssl req -x509 -nodes -newkey rsa:4096 \
-      -keyout "$temp_key" \
-      -out "$ca_crt" \
-      -days 365 \
-      -subj "/CN=MAS Local CA" >/dev/null 2>&1
+    printf '%s' "$GRAFANA_PASS" >"$grafana_pass_file"
   )
-  rm -rf "$temp_dir"
-  chmod 644 "$ca_crt"
-  log_info "Generated mTLS CA certificate (365 days) without persisting the CA private key."
+  chmod 600 "$grafana_pass_file"
+  log_info "Wrote Grafana password file."
 }
 
 dotenv_quote() {
@@ -191,7 +184,6 @@ write_env_file() {
     printf 'REDIS_PASS=%s\n' "$(dotenv_quote "$REDIS_PASS")"
     printf 'RABBITMQ_PASS=%s\n' "$(dotenv_quote "$RABBITMQ_PASS")"
     printf 'RABBITMQ_COOKIE=%s\n' "$(dotenv_quote "$RABBITMQ_COOKIE")"
-    printf 'VAULT_TOKEN=%s\n' "$(dotenv_quote "$VAULT_TOKEN")"
     printf 'LOG_LEVEL=%s\n' "$(dotenv_quote "$LOG_LEVEL")"
     printf 'HMAC_KEY=%s\n' "$(dotenv_quote "$hmac_key")"
     if [[ -n "$previous_hmac_key" ]]; then
@@ -302,8 +294,6 @@ preflight_checks() {
   command -v curl >/dev/null 2>&1 || fail "curl is required."
   command -v jq >/dev/null 2>&1 || fail "jq is required."
   command -v openssl >/dev/null 2>&1 || fail "openssl is required."
-  [[ -n "$GRAFANA_PASS" ]] || fail "GRAFANA_PASS must be set before startup."
-
   detect_compose
   detect_python
 
@@ -335,7 +325,7 @@ bootstrap_secrets() {
 
   ensure_hmac_key
   ensure_jwt_keypair
-  ensure_ca_certificate
+  ensure_grafana_password_file
   write_env_file
 }
 
