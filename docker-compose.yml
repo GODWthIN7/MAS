@@ -1,0 +1,15 @@
+services:
+  api:
+    build:
+      context: .
+    command: uvicorn app.main:app --host ${HOST:-0.0.0.0} --port ${PORT:-8000} --reload
+    environment:
+      APP_NAME: ${APP_NAME:-MAS API}
+      APP_ENV: ${APP_ENV:-development}
+      DEBUG: ${DEBUG:-true}
+      HOST: ${HOST:-0.0.0.0}
+      PORT: ${PORT:-8000}
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    volumes:
+      - .:/code
