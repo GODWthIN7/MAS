@@ -44,6 +44,7 @@ The Phase 0 preflight check validates tools automatically, but host-level resour
 |---|---|
 | Docker Engine | 24.0+ |
 | Docker Compose | v2.20+ (plugin or standalone); use `docker compose` for plugin, `docker-compose` for standalone |
+| Python | 3.10+ — used to safely serialize generated `.env` values for Compose |
 | curl | Any recent version — used for health polling and smoke tests |
 | jq | 1.6+ — used for JSON inspection in preflight daemon validation and diagnostic commands |
 | openssl | 3.0+ — required for secret generation (HMAC, RSA 4096, mTLS CA) |
@@ -85,10 +86,10 @@ The startup script implements a 7-phase sequential boot sequence with colour-cod
 
 | Phase | Function | What It Does |
 |---|---|---|
-| 0 | `preflight_checks()` | Verifies required tools (docker, Docker Compose plugin or docker-compose, curl, jq, openssl), Docker daemon responsiveness, Compose file presence and syntax validity, and ≥ 10 GB free disk space |
+| 0 | `preflight_checks()` | Verifies required tools (docker, Docker Compose plugin or docker-compose, Python, curl, jq, openssl), Docker daemon responsiveness, Compose file presence and syntax validity, and ≥ 10 GB free disk space |
 | 1 | `bootstrap_secrets()` | Generates 256-bit HMAC-SHA256 signing key (auto-rotates if > 24 h old while retaining the previous key for overlap rollout), RS256 4096-bit JWT key pair, mTLS CA certificate (365-day validity), and writes `.env` |
 | 2 | `prepare_infrastructure()` | Creates `mas-overlay` bridge network (172.28.0.0/16) and 5 named Docker volumes if absent; creates the host log directory |
-| 3 | `pull_images()` | Pulls all 14 service images defined in `docker-compose.yml` using Compose pull in quiet mode |
+| 3 | `pull_images()` | Pulls all service images defined in `docker-compose.yml` using Compose pull in quiet mode |
 | 4 | `start_infrastructure()` | Starts postgres, redis, qdrant, rabbitmq, vault with per-service health polling and configurable timeouts |
 | 5 | `start_agents()` | Starts gateway, orchestrator, planner, memory with health polling; then scales executor to ×3 replicas and starts critic |
 | 6 | `start_observability()` | Starts prometheus, grafana, jaeger and logs their dashboard URLs |
@@ -121,7 +122,7 @@ See `./startup.sh` for the full source.
 
 ### YAML Anchor Pattern — `x-mas-defaults` and `x-agent-env`
 
-All 14 services inherit a common base configuration via the `&mas-defaults` YAML anchor. This anchor injects three shared concerns into every service block using the `<<: *mas-defaults` merge key: (1) restart policy set to `unless-stopped`, (2) membership in the `mas-overlay` bridge network, and (3) structured JSON logging configured with `json-file` driver at 50 MB maximum file size and a 5-file rotation window.
+All services inherit a common base configuration via the `&mas-defaults` YAML anchor. This anchor injects three shared concerns into every service block using the `<<: *mas-defaults` merge key: (1) restart policy set to `unless-stopped`, (2) membership in the `mas-overlay` bridge network, and (3) structured JSON logging configured with `json-file` driver at 50 MB maximum file size and a 5-file rotation window.
 
 All 7 agent containers additionally inherit the `&agent-env` environment block via `<<: *agent-env`, which injects the full runtime wiring: `HMAC_KEY`, `RABBITMQ_URL`, `POSTGRES_URL`, `REDIS_URL`, `QDRANT_URL`, `VAULT_ADDR`, and the OpenTelemetry `OTEL_EXPORTER_OTLP_ENDPOINT` pointing to the Jaeger collector at `http://jaeger:4317`.
 
@@ -222,7 +223,7 @@ Complete all items before promoting to a production or internet-facing environme
 
 | Symptom | Likely Cause | Fix |
 |---|---|---|
-| Service stuck in "starting" / never reaches healthy | Image not yet pulled locally | Run `docker-compose pull` before starting |
+| Service stuck in "starting" / never reaches healthy | Image not yet pulled locally | Run `docker compose pull` before starting |
 | Health check consistently fails at startup | Insufficient RAM; OOM killer terminating containers | Ensure ≥ 16 GB RAM available; check `dmesg` for OOM events |
 | Gateway returns 401 Unauthorized | JWT public key mismatch between generator and gateway | Verify `jwt_public.pem` is correctly mounted into `/run/mas-secrets` |
 | RabbitMQ fails to start / crashes on boot | Erlang cluster cookie mismatch on restart | Check `RABBITMQ_COOKIE` env var; delete `mas-rabbitmq` data volume if stale state persists |

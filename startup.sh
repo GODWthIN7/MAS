@@ -27,6 +27,7 @@ RESET=$'\033[0m'
 
 COMPOSE_CMD=()
 COMPOSE_FILE_PATH=""
+PYTHON_BIN=""
 
 resolve_path() {
   if [[ "$1" == /* ]]; then
@@ -73,6 +74,16 @@ detect_compose() {
     COMPOSE_CMD=(docker-compose)
   else
     fail "Docker Compose v2 plugin or docker-compose binary is required."
+  fi
+}
+
+detect_python() {
+  if command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN="python3"
+  elif command -v python >/dev/null 2>&1; then
+    PYTHON_BIN="python"
+  else
+    fail "Python 3 is required to write a safely quoted .env file."
   fi
 }
 
@@ -151,7 +162,7 @@ ensure_ca_material() {
 }
 
 dotenv_quote() {
-  python -c 'import json, sys; print(json.dumps(sys.argv[1]))' "$1"
+  "$PYTHON_BIN" -c 'import json, sys; print(json.dumps(sys.argv[1]))' "$1"
 }
 
 write_env_file() {
@@ -261,6 +272,11 @@ graceful_shutdown() {
   fi
 }
 
+ensure_overlay_network() {
+  docker network inspect mas-overlay >/dev/null 2>&1 || \
+    docker network create --driver bridge --subnet 172.28.0.0/16 mas-overlay >/dev/null
+}
+
 preflight_checks() {
   log_phase "Phase 0 · Preflight checks"
 
@@ -270,12 +286,14 @@ preflight_checks() {
   command -v openssl >/dev/null 2>&1 || fail "openssl is required."
 
   detect_compose
+  detect_python
 
   COMPOSE_FILE_PATH="$(resolve_path "$MAS_COMPOSE_FILE")"
 
   [[ -f "$COMPOSE_FILE_PATH" ]] || fail "Compose file not found: $COMPOSE_FILE_PATH"
 
   docker info --format '{{json .}}' | jq -e '.ServerVersion' >/dev/null || fail "Docker daemon is not responding."
+  ensure_overlay_network
   compose config >/dev/null
   log_info "Compose syntax is valid."
 
@@ -304,8 +322,7 @@ prepare_infrastructure() {
   log_phase "Phase 2 · Prepare infrastructure"
   local log_dir_path
 
-  docker network inspect mas-overlay >/dev/null 2>&1 || \
-    docker network create --driver bridge --subnet 172.28.0.0/16 mas-overlay >/dev/null
+  ensure_overlay_network
   log_info "Bridge network mas-overlay is ready."
 
   local volume
