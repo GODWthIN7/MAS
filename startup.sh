@@ -189,6 +189,7 @@ write_env_file() {
     printf 'REDIS_PASS=%s\n' "$(dotenv_quote "$REDIS_PASS")"
     printf 'RABBITMQ_PASS=%s\n' "$(dotenv_quote "$RABBITMQ_PASS")"
     printf 'RABBITMQ_COOKIE=%s\n' "$(dotenv_quote "$RABBITMQ_COOKIE")"
+    printf 'VAULT_TOKEN=%s\n' "$(dotenv_quote "$VAULT_TOKEN")"
     printf 'LOG_LEVEL=%s\n' "$(dotenv_quote "$LOG_LEVEL")"
     printf 'HMAC_KEY=%s\n' "$(dotenv_quote "$hmac_key")"
     if [[ -n "$previous_hmac_key" ]]; then
