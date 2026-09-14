@@ -61,7 +61,7 @@ fail() {
 }
 
 compose() {
-  local cmd=("${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE_PATH")
+  local cmd=("${COMPOSE_CMD[@]}" --project-directory "$SCRIPT_DIR" -f "$COMPOSE_FILE_PATH")
   if [[ -f "$SCRIPT_DIR/.env" ]]; then
     cmd+=(--env-file "$SCRIPT_DIR/.env")
   fi
