@@ -13,9 +13,9 @@ x-agent-env: &agent-env
   LOG_LEVEL: ${LOG_LEVEL:-info}
   HMAC_KEY: ${HMAC_KEY:-}
   HMAC_PREVIOUS_KEY: ${HMAC_PREVIOUS_KEY:-}
-  RABBITMQ_URL: amqp://mas:${RABBITMQ_PASS:-changeme}@rabbitmq:5672/%2f
-  POSTGRES_URL: postgres://mas:${POSTGRES_PASS:-changeme}@postgres:5432/mas?sslmode=disable
-  REDIS_URL: redis://:${REDIS_PASS:-changeme}@redis:6379/0
+  RABBITMQ_URL: amqp://mas:${RABBITMQ_PASS_URI:-changeme}@rabbitmq:5672/%2f
+  POSTGRES_URL: postgres://mas:${POSTGRES_PASS_URI:-changeme}@postgres:5432/mas?sslmode=disable
+  REDIS_URL: redis://:${REDIS_PASS_URI:-changeme}@redis:6379/0
   QDRANT_URL: http://qdrant:6333
   OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317
 

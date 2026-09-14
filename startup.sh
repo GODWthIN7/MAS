@@ -169,6 +169,22 @@ print("'" + value + "'")
 PY
 }
 
+uri_userinfo_quote() {
+  "$PYTHON_BIN" - "$1" <<'PY'
+import sys
+from urllib.parse import quote
+
+print(quote(sys.argv[1], safe=""))
+PY
+}
+
+refresh_encoded_credentials() {
+  POSTGRES_PASS_URI="$(uri_userinfo_quote "$POSTGRES_PASS")"
+  REDIS_PASS_URI="$(uri_userinfo_quote "$REDIS_PASS")"
+  RABBITMQ_PASS_URI="$(uri_userinfo_quote "$RABBITMQ_PASS")"
+  export POSTGRES_PASS_URI REDIS_PASS_URI RABBITMQ_PASS_URI
+}
+
 write_env_file() {
   local hmac_key
   local previous_hmac_key=""
@@ -186,8 +202,11 @@ write_env_file() {
     printf 'MAS_ROTATE_HMAC=%s\n' "$(dotenv_quote "$MAS_ROTATE_HMAC")"
     printf 'PROMETHEUS_IMAGE=%s\n' "$(dotenv_quote "$PROMETHEUS_IMAGE")"
     printf 'POSTGRES_PASS=%s\n' "$(dotenv_quote "$POSTGRES_PASS")"
+    printf 'POSTGRES_PASS_URI=%s\n' "$(dotenv_quote "$POSTGRES_PASS_URI")"
     printf 'REDIS_PASS=%s\n' "$(dotenv_quote "$REDIS_PASS")"
+    printf 'REDIS_PASS_URI=%s\n' "$(dotenv_quote "$REDIS_PASS_URI")"
     printf 'RABBITMQ_PASS=%s\n' "$(dotenv_quote "$RABBITMQ_PASS")"
+    printf 'RABBITMQ_PASS_URI=%s\n' "$(dotenv_quote "$RABBITMQ_PASS_URI")"
     printf 'RABBITMQ_COOKIE=%s\n' "$(dotenv_quote "$RABBITMQ_COOKIE")"
     printf 'VAULT_TOKEN=%s\n' "$(dotenv_quote "$VAULT_TOKEN")"
     printf 'LOG_LEVEL=%s\n' "$(dotenv_quote "$LOG_LEVEL")"
@@ -303,6 +322,7 @@ preflight_checks() {
   command -v openssl >/dev/null 2>&1 || fail "openssl is required."
   detect_compose
   detect_python
+  refresh_encoded_credentials
 
   COMPOSE_FILE_PATH="$(resolve_path "$MAS_COMPOSE_FILE")"
   [[ -f "$COMPOSE_FILE_PATH" ]] || fail "Compose file not found: $COMPOSE_FILE_PATH"
