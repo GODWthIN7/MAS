@@ -1,0 +1,34 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: gateway
+    static_configs:
+      - targets: ["gateway:8080"]
+
+  - job_name: orchestrator
+    static_configs:
+      - targets: ["orchestrator:8081"]
+
+  - job_name: planner
+    static_configs:
+      - targets: ["planner:8082"]
+
+  - job_name: memory
+    static_configs:
+      - targets: ["memory:8083"]
+
+  - job_name: critic
+    static_configs:
+      - targets: ["critic:8085"]
+
+  - job_name: executor
+    dns_sd_configs:
+      - names: ["executor"]
+        type: A
+        port: 8084
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["prometheus:9090"]
