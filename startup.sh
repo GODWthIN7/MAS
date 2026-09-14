@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-MAS_ENV="${MAS_ENV:-production}"
+MAS_ENV="${MAS_ENV:-staging}"
 MAS_VERSION="${MAS_VERSION:-1.0.0}"
 MAS_COMPOSE_FILE="${MAS_COMPOSE_FILE:-docker-compose.yml}"
 MAS_LOG_DIR="${MAS_LOG_DIR:-./logs}"
