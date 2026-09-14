@@ -1,4 +1,54 @@
-# Multi-Agent System — Deployment Bundle v1.0.0
+# MAS
+
+MAS contains the FastAPI backend scaffold for the Multi Agent Development Team project and an operator-focused deployment bundle for bringing up the broader MAS stack locally or on internal infrastructure.
+
+## Application development
+
+### Project structure
+
+```text
+app/
+  api/         # Route registration and HTTP endpoints
+  core/        # Centralized settings and shared application wiring
+  models/      # Domain models
+  services/    # Business logic
+tests/         # API and service tests
+```
+
+### Getting started
+
+1. Create a virtual environment.
+2. Copy the example environment file.
+3. Install the project with development dependencies.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+cp .env.example .env
+pip install --upgrade pip
+pip install .[dev]
+```
+
+Run the API locally with:
+
+```bash
+python -m app.main
+```
+
+For autoreload during local development:
+
+```bash
+uvicorn app.main:create_app --factory --host "${HOST:-127.0.0.1}" --port "${PORT:-8000}" --reload
+```
+
+Quality checks:
+
+```bash
+ruff check .
+pytest
+```
+
+## Deployment bundle v1.0.0
 
 **Startup Script · Docker Compose · Operational Guide**
 
