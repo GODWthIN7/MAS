@@ -99,8 +99,8 @@ The Phase 0 preflight check validates tools automatically, but host-level resour
 | jq | 1.6+ — used for JSON inspection in preflight daemon validation and diagnostic commands |
 | openssl | 3.0+ — required for secret generation (HMAC, RSA 4096) |
 | Disk space | ≥ 10 GB free (preflight warns if below threshold) |
-| RAM | ≥ 16 GB recommended (Qdrant + Memory agent each consume up to 4 GB) |
-| CPU | ≥ 4 cores recommended; executor pool runs ×3 replicas at 2.0 CPU each |
+| RAM | ≥ 22 GB recommended to accommodate all configured service memory limits, including the ×3 executor pool |
+| CPU | ≥ 20 cores recommended to accommodate the configured 19.5 CPU limit budget without host-level throttling |
 | OS | Linux (Ubuntu 22.04+) or macOS 13+ (Ventura or later) |
 
 ---
@@ -111,7 +111,7 @@ All variables are consumed by `startup.sh` and propagated into the Docker Compos
 
 | Variable | Default | Description |
 |---|---|---|
-| `MAS_ENV` | `production` | Deployment environment: production / staging / dev |
+| `MAS_ENV` | `staging` | Deployment environment: production / staging / dev |
 | `MAS_VERSION` | `1.0.0` | Semantic version tag applied to all custom agent images |
 | `MAS_COMPOSE_FILE` | `docker-compose.yml` | Path to the Compose file passed to all Compose invocations |
 | `MAS_LOG_DIR` | `./logs` | Host filesystem path for the shared log volume mount |
@@ -132,7 +132,7 @@ All variables are consumed by `startup.sh` and propagated into the Docker Compos
 
 ## 4. `startup.sh` Annotated Reference
 
-The startup script implements an 8-phase sequential boot sequence with colour-coded terminal output (ANSI escape codes), automatic secret generation and rotation, per-service health polling via `docker inspect`, and a graceful shutdown trap registered for `SIGINT` and `SIGTERM`. Each phase is isolated into a named function; failures in any phase abort the entire sequence with a non-zero exit code (`set -euo pipefail`).
+The startup script implements an 8-phase sequential boot sequence with colour-coded terminal output (ANSI escape codes), automatic secret generation, optional HMAC rotation when `MAS_ROTATE_HMAC=true`, per-service health polling via `docker inspect`, and a graceful shutdown trap registered for `SIGINT` and `SIGTERM`. Each phase is isolated into a named function; failures in any phase abort the entire sequence with a non-zero exit code (`set -euo pipefail`).
 
 ### Phase Summary
 
@@ -176,7 +176,7 @@ See `./startup.sh` for the full source.
 
 All services inherit a common base configuration via the `&mas-defaults` YAML anchor. This anchor injects three shared concerns into every service block using the `<<: *mas-defaults` merge key: (1) restart policy set to `unless-stopped`, (2) membership in the `mas-overlay` bridge network, and (3) structured JSON logging configured with `json-file` driver at 50 MB maximum file size and a 5-file rotation window.
 
-All 7 agent containers additionally inherit the `&agent-env` environment block via `<<: *agent-env`, which injects the shared runtime wiring: `HMAC_KEY`, `RABBITMQ_URL`, `POSTGRES_URL`, `REDIS_URL`, `QDRANT_URL`, and the OpenTelemetry `OTEL_EXPORTER_OTLP_ENDPOINT` pointing to the Jaeger collector at `http://jaeger:4317`.
+All six agent services additionally inherit the `&agent-env` environment block via `<<: *agent-env`, which injects the shared runtime wiring: `HMAC_KEY`, `RABBITMQ_URL`, `POSTGRES_URL`, `REDIS_URL`, `QDRANT_URL`, and the OpenTelemetry `OTEL_EXPORTER_OTLP_ENDPOINT` pointing to the Jaeger collector at `http://jaeger:4317`.
 
 ### Health Check Defaults
 

@@ -39,6 +39,17 @@ resolve_path() {
   fi
 }
 
+validate_production_credentials() {
+  if [[ "$MAS_ENV" != "production" ]]; then
+    return
+  fi
+
+  [[ "$POSTGRES_PASS" != "changeme" ]] || fail "POSTGRES_PASS must be changed when MAS_ENV=production."
+  [[ "$REDIS_PASS" != "changeme" ]] || fail "REDIS_PASS must be changed when MAS_ENV=production."
+  [[ "$RABBITMQ_PASS" != "changeme" ]] || fail "RABBITMQ_PASS must be changed when MAS_ENV=production."
+  [[ "$RABBITMQ_COOKIE" != "mas-secret-cookie" ]] || fail "RABBITMQ_COOKIE must be changed when MAS_ENV=production."
+}
+
 log_phase() {
   printf '%s==>%s %s\n' "$BLUE" "$RESET" "$1"
 }
@@ -289,10 +300,20 @@ wait_for_scale() {
 }
 
 graceful_shutdown() {
+  local signal="${1:-INT}"
+  local exit_code=130
+
+  if [[ "$signal" == "TERM" ]]; then
+    exit_code=143
+  fi
+
   if [[ -n "${COMPOSE_FILE_PATH:-}" ]] && [[ -f "$COMPOSE_FILE_PATH" ]]; then
     log_warn "Signal received, shutting down stack with 30-second drain..."
     compose down --timeout 30 || true
   fi
+
+  trap - INT TERM
+  exit "$exit_code"
 }
 
 ensure_overlay_network() {
@@ -322,6 +343,7 @@ preflight_checks() {
   command -v openssl >/dev/null 2>&1 || fail "openssl is required."
   detect_compose
   detect_python
+  validate_production_credentials
   refresh_encoded_credentials
 
   COMPOSE_FILE_PATH="$(resolve_path "$MAS_COMPOSE_FILE")"
@@ -434,7 +456,13 @@ probe_http_endpoint() {
   start_time="$(date +%s)"
 
   while true; do
-    if curl --fail --silent --show-error "$url" >/dev/null; then
+    if curl \
+      --connect-timeout 5 \
+      --max-time 10 \
+      --fail \
+      --silent \
+      --show-error \
+      "$url" >/dev/null; then
       log_info "PASS · $name"
       return 0
     fi
@@ -481,7 +509,8 @@ smoke_tests() {
 }
 
 main() {
-  trap graceful_shutdown INT TERM
+  trap 'graceful_shutdown INT' INT
+  trap 'graceful_shutdown TERM' TERM
 
   preflight_checks
   bootstrap_secrets

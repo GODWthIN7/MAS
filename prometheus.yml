@@ -24,8 +24,10 @@ scrape_configs:
       - targets: ["critic:8085"]
 
   - job_name: executor
-    static_configs:
-      - targets: ["executor:8084"]
+    dns_sd_configs:
+      - names: ["executor"]
+        type: A
+        port: 8084
 
   - job_name: prometheus
     static_configs:

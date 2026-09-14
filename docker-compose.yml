@@ -30,10 +30,22 @@ x-log-volume: &log-volume
   source: ${MAS_LOG_DIR:-./logs}
   target: /var/log/mas
 
-x-secrets-volume: &secrets-volume
+x-jwt-public-file: &jwt-public-file
   type: bind
-  source: ./.secrets
-  target: /run/mas-secrets
+  source: ./.secrets/jwt_public.pem
+  target: /run/mas-secrets/jwt_public.pem
+  read_only: true
+
+x-jwt-private-file: &jwt-private-file
+  type: bind
+  source: ./.secrets/jwt_private.pem
+  target: /run/mas-secrets/jwt_private.pem
+  read_only: true
+
+x-grafana-pass-file: &grafana-pass-file
+  type: bind
+  source: ./.secrets/grafana_pass
+  target: /run/mas-secrets/grafana_pass
   read_only: true
 
 services:
@@ -100,6 +112,7 @@ services:
       RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_COOKIE:-mas-secret-cookie}
     expose:
       - "5672"
+    ports:
       - "127.0.0.1:15672:15672"
     volumes:
       - *log-volume
@@ -153,7 +166,7 @@ services:
       - "8080:8080"
     volumes:
       - *log-volume
-      - *secrets-volume
+      - *jwt-public-file
     cpus: 1.0
     mem_limit: 512m
     healthcheck:
@@ -181,7 +194,7 @@ services:
       - "127.0.0.1:8081:8081"
     volumes:
       - *log-volume
-      - *secrets-volume
+      - *jwt-private-file
     cpus: 2.0
     mem_limit: 1g
     healthcheck:
@@ -199,10 +212,9 @@ services:
       SERVICE_NAME: planner
       SERVICE_PORT: "8082"
     ports:
-      - "8082:8082"
+      - "127.0.0.1:8082:8082"
     volumes:
       - *log-volume
-      - *secrets-volume
     cpus: 2.0
     mem_limit: 2g
     healthcheck:
@@ -223,7 +235,6 @@ services:
       - "8084"
     volumes:
       - *log-volume
-      - *secrets-volume
     cpus: 2.0
     mem_limit: 2g
     healthcheck:
@@ -241,10 +252,9 @@ services:
       SERVICE_NAME: critic
       SERVICE_PORT: "8085"
     ports:
-      - "8085:8085"
+      - "127.0.0.1:8085:8085"
     volumes:
       - *log-volume
-      - *secrets-volume
     cpus: 2.0
     mem_limit: 2g
     healthcheck:
@@ -266,10 +276,9 @@ services:
       SERVICE_NAME: memory
       SERVICE_PORT: "8083"
     ports:
-      - "8083:8083"
+      - "127.0.0.1:8083:8083"
     volumes:
       - *log-volume
-      - *secrets-volume
     cpus: 2.0
     mem_limit: 4g
     healthcheck:
@@ -300,10 +309,10 @@ services:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD__FILE: /run/mas-secrets/grafana_pass
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - *log-volume
-      - *secrets-volume
+      - *grafana-pass-file
       - mas-grafana:/var/lib/grafana
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3000/api/health >/dev/null 2>&1"]
@@ -318,9 +327,9 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
-      - "16686:16686"
-      - "4317:4317"
-      - "4318:4318"
+      - "127.0.0.1:16686:16686"
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
     volumes:
       - *log-volume
     healthcheck:
@@ -334,7 +343,12 @@ networks:
 
 volumes:
   mas-postgres:
+    name: mas-postgres
   mas-redis:
+    name: mas-redis
   mas-qdrant:
+    name: mas-qdrant
   mas-rabbitmq:
+    name: mas-rabbitmq
   mas-grafana:
+    name: mas-grafana
