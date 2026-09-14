@@ -100,8 +100,7 @@ services:
       RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_COOKIE:-mas-secret-cookie}
     expose:
       - "5672"
-    ports:
-      - "15672:15672"
+      - "127.0.0.1:15672:15672"
     volumes:
       - *log-volume
       - mas-rabbitmq:/var/lib/rabbitmq
