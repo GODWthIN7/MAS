@@ -33,7 +33,7 @@ jobs:
           SHOULD_PUBLISH=false
 
           if { [ "${GITHUB_EVENT_NAME}" = "push" ] && { [ "${GITHUB_REF}" = "refs/heads/main" ] || [[ "${GITHUB_REF}" == refs/tags/v* ]]; }; } || \
-             { [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ "${GITHUB_REF}" = "refs/heads/main" ]; }; then
+             { [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && { [ "${GITHUB_REF}" = "refs/heads/main" ] || [[ "${GITHUB_REF}" == refs/tags/v* ]]; }; }; then
             SHOULD_PUBLISH=true
           fi
 
