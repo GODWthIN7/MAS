@@ -86,6 +86,6 @@ jobs:
           target: runtime
           platforms: linux/amd64
           push: false
-          tags: mas:ci
+          tags: local/mas-ci:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
