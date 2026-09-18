@@ -36,7 +36,7 @@ jobs:
             publish_ref=true
           fi
 
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && ( "${GITHUB_REF}" == "refs/heads/main" || "${GITHUB_REF}" == refs/tags/v* ) ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${GITHUB_REF}" == "refs/heads/main" ]]; then
             publish_ref=true
           fi
 
