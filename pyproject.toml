@@ -22,12 +22,22 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
+addopts = "-ra"
 pythonpath = ["."]
 testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+src = ["app", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"

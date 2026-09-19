@@ -15,38 +15,59 @@ app/
 tests/         # API and service tests
 ```
 
-### Getting started
+### Getting started (local app workflow)
 
-1. Create a virtual environment.
-2. Copy the example environment file.
-3. Install the project with development dependencies.
+1. Verify Python 3.12+ is available:
 
 ```bash
-python -m venv .venv
+python3.12 --version
+```
+
+2. Create and activate a local virtual environment (Unix-like shells):
+
+```bash
+python3.12 -m venv .venv
 source .venv/bin/activate
-cp .env.example .env
-pip install --upgrade pip
-pip install .[dev]
 ```
 
-Run the API locally with:
+3. Copy local environment defaults and install editable package + dev dependencies:
 
 ```bash
-python -m app.main
+cp .env.example .env
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
 ```
 
-For autoreload during local development:
+4. Run linting, formatting checks, and tests:
+
+```bash
+ruff check .
+ruff format --check .
+pytest
+```
+
+5. Start FastAPI with reload:
 
 ```bash
 uvicorn app.main:create_app --factory --host "${HOST:-127.0.0.1}" --port "${PORT:-8000}" --reload
 ```
 
-Quality checks:
+6. Verify the health endpoint in another terminal:
 
 ```bash
-ruff check .
-pytest
+curl -fsS "http://${HOST:-127.0.0.1}:${PORT:-8000}/health"
 ```
+
+Optional convenience targets are also available via `Makefile`:
+
+```bash
+make install
+make check
+make run
+make health
+```
+
+> `docker compose`/`startup.sh` bring up the full MAS bundle and are heavier than the app-only workflow above. Use them only when you need the multi-service stack.
 
 ## Deployment bundle v1.0.0
 
